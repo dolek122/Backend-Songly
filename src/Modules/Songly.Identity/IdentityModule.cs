@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Songly.Common.Modules;
 using Songly.Common.Persistence;
+using Songly.Identity.AccountDeletion;
 using Songly.Identity.Administration;
 using Songly.Identity.Http;
 using Songly.Identity.PasswordReset;
@@ -38,6 +39,11 @@ public sealed class IdentityModule : IModule
         services.AddScoped<PasswordResetMailer>();
         services.AddScoped<PasswordResetService>();
 
+        services.AddOptions<AccountDeletionOptions>().Bind(configuration.GetSection(AccountDeletionOptions.Section));
+        services.AddScoped<AccountEraser>();
+        services.AddScoped<AccountDeletionMailer>();
+        services.AddScoped<AccountDeletionService>();
+
         services.AddSingleton<AdministrationMetrics>();
         services.AddScoped<AccountSuspensionService>();
         services.AddScoped<AdminRoleService>();
@@ -49,5 +55,6 @@ public sealed class IdentityModule : IModule
     {
         endpoints.MapAuthEndpoints();
         endpoints.MapAdminEndpoints();
+        endpoints.MapAccountDeletionPages();
     }
 }

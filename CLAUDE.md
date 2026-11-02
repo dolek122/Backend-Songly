@@ -45,6 +45,12 @@ The repo uses Microsoft.Testing.Platform (`global.json`). Filter with
 - Register every new module in `ModuleCatalog`. A module that needs middleware implements
   `IModule.UsePipeline` (identity does: authentication, authorization).
 - Each module has its own `DbContext` (`AddModuleDbContext<T>`), mapping only its own tables.
+- Modules react to each other through domain events (`IDomainEvents`, `IDomainEventHandler<T>`,
+  ADR 0006). Publish inside a `ModuleTransaction` for "all or nothing" (handlers share the
+  transaction), after the save for reactions to a committed fact.
+- **A module with per-user data handles `UserAccountDeletionRequested`** and deletes that data —
+  otherwise account deletion fails on a foreign key. Keep the "what we delete" list on the
+  `/account-deletion` page (`AccountDeletionPages`) in step with those handlers.
 - `Songly.Common` is infrastructure only and must not know any module.
 - When adding an architecture rule, make it fail once with a deliberate violation first.
 

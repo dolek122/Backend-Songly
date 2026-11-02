@@ -2,8 +2,10 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Songly.Common.Web;
+using Songly.Identity.AccountDeletion;
 using Songly.Identity.Administration;
 using Songly.Identity.PasswordReset;
 using Songly.Identity.Registration;
@@ -69,6 +71,15 @@ internal static class AuthEndpoints
         // why, or contest the decision. An active account gets suspended=false, not a 404.
         auth.MapGet("/me/suspension", (ClaimsPrincipal user, AccountSuspensionService service, CancellationToken cancellationToken)
                 => service.OwnSuspensionAsync(user.GetUserId(), cancellationToken))
+            .RequireAuthorization(Policies.UserOrSuspended);
+
+        // Open to a suspended account too: a sanction must not take away the GDPR right to erasure.
+        // [FromBody] because minimal APIs do not infer a body for DELETE.
+        auth.MapDelete("/me", async Task<NoContent> ([FromBody] DeleteAccountRequest request, ClaimsPrincipal user, AccountDeletionService service, CancellationToken cancellationToken) =>
+            {
+                await service.DeleteOwnAccountAsync(user.GetUserId(), request.Password!, cancellationToken);
+                return TypedResults.NoContent();
+            })
             .RequireAuthorization(Policies.UserOrSuspended);
 
         auth.MapPost("/me/suspension/appeal", async Task<NoContent> (SuspensionAppealRequest request, ClaimsPrincipal user, AccountSuspensionService service, CancellationToken cancellationToken) =>

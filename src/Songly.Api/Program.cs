@@ -2,6 +2,7 @@ using Scalar.AspNetCore;
 using Serilog;
 using Serilog.Formatting.Compact;
 using Songly.Api;
+using Songly.Common.Events;
 using Songly.Common.Mail;
 using Songly.Common.Modules;
 using Songly.Common.Persistence;
@@ -35,6 +36,7 @@ builder.Services.AddSerilog((_, logger) =>
 });
 
 builder.Services.AddSonglyDatabase();
+builder.Services.AddSonglyEvents();
 builder.Services.AddSonglyRedis(builder.Configuration);
 builder.Services.AddSonglyMail(builder.Configuration);
 builder.Services.AddSonglyWeb();

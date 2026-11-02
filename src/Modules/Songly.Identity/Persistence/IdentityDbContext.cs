@@ -19,6 +19,8 @@ internal sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> opti
 
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
 
+    public DbSet<AccountDeletionToken> AccountDeletionTokens => Set<AccountDeletionToken>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<User>(user =>
@@ -43,6 +45,12 @@ internal sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> opti
         modelBuilder.Entity<PasswordResetToken>(token =>
         {
             token.ToTable("password_reset_tokens");
+            token.HasKey(t => t.Id);
+        });
+
+        modelBuilder.Entity<AccountDeletionToken>(token =>
+        {
+            token.ToTable("account_deletion_tokens");
             token.HasKey(t => t.Id);
         });
     }

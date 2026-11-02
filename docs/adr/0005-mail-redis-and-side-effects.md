@@ -41,9 +41,10 @@ EF Core's concurrency exception), logged as a warning with the stack trace — t
 comes from a module that forgot to delete its rows on account deletion. Two clicks on one
 verification link are exactly this kind of race.
 
-**Domain events are still not introduced.** The original publishes `UserRegisteredEvent` at
+**Domain events are not introduced here.** The original publishes `UserRegisteredEvent` at
 verification; its only consumer is the profile module (it creates the profile). The event
 arrives together with that module — publishing it to nobody would be code without behaviour.
+(The event mechanism itself came with account deletion, ADR 0006.)
 
 ## Consequences
 
