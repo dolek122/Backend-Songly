@@ -23,6 +23,7 @@ internal sealed class IdentityMetrics
     private readonly Counter<long> _refreshes;
     private readonly Counter<long> _registrations;
     private readonly Counter<long> _passwordResets;
+    private readonly Counter<long> _accountDeletions;
 
     public IdentityMetrics(IMeterFactory meterFactory)
     {
@@ -31,6 +32,7 @@ internal sealed class IdentityMetrics
         _refreshes = meter.CreateCounter<long>("songly.auth.refresh.attempts");
         _registrations = meter.CreateCounter<long>("songly.auth.registration.attempts");
         _passwordResets = meter.CreateCounter<long>("songly.auth.password-reset.attempts");
+        _accountDeletions = meter.CreateCounter<long>("songly.auth.account-deletion.attempts");
     }
 
     public void LoginSucceeded() => _logins.Add(1, Outcome("success"));
@@ -52,6 +54,9 @@ internal sealed class IdentityMetrics
     /// is enough to spot abuse.
     /// </summary>
     public void PasswordReset(string outcome) => _passwordResets.Add(1, Outcome(outcome));
+
+    /// <summary>The web page's flow; like password reset, no series for "no such account".</summary>
+    public void AccountDeletion(string outcome) => _accountDeletions.Add(1, Outcome(outcome));
 
     private static KeyValuePair<string, object?> Outcome(string value) => new("outcome", value);
 }

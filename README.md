@@ -16,9 +16,9 @@ does; this repository documents *how* it is done in .NET ([ADR 0001](docs/adr/00
 
 | Module | Responsibility | Status |
 |---|---|---|
-| Common | Error format, request correlation, JSON conventions, validation, e-mail channel, Redis interval gates | ✅ |
+| Common | Error format, request correlation, JSON conventions, validation, e-mail channel, Redis interval gates, domain events, cross-module transactions | ✅ |
 | Migrations | Schema (33 original migrations) | ✅ |
-| Identity | Registration with e-mail verification, login, JWT + rotated refresh tokens with theft detection, password change and reset, live roles, suspensions with appeals, admin role management | 🚧 in progress — account deletion next |
+| Identity | Registration with e-mail verification, login, JWT + rotated refresh tokens with theft detection, password change and reset, live roles, suspensions with appeals, admin roles, account deletion (API and web page) | 🚧 almost done — session cleanup and local dev accounts next |
 | Profile | Public profiles, favourite genres | — |
 | Social | Friends, friend requests, blocking | — |
 | Content | Posts, likes, comments, shares, feed | — |
@@ -76,6 +76,10 @@ roles are read from the database on every request, so suspending an account or r
 role takes effect immediately; the whole admin area is guarded by path. A stolen refresh token
 is detected the moment either copy is reused, and every session of the account is revoked
 ([ADR 0004](docs/adr/0004-authentication-and-authorization.md)).
+
+**Deleting an account is one transaction across modules.** Every module deletes its own data in
+reaction to a domain event, inside the same database transaction and before the account row goes;
+if any module fails, nothing is deleted ([ADR 0006](docs/adr/0006-domain-events-and-cross-module-transaction.md)).
 
 **No oracle for who has an account.** Registering a free address and a taken one returns the
 same response in the same time; the only difference is the e-mail the mailbox owner receives (a

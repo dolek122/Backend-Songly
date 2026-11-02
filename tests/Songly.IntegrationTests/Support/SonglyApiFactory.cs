@@ -3,8 +3,10 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
+using Songly.Common.Events;
 using Songly.Common.Modules;
 using Songly.Common.Persistence;
+using Songly.Identity.Contracts;
 using Testcontainers.PostgreSql;
 using Testcontainers.Redis;
 
@@ -93,6 +95,7 @@ public sealed class SonglyApiFactory : WebApplicationFactory<Program>, IAsyncLif
         {
             services.AddSingleton<IModule, ProbeModule>();
             services.AddModuleDbContext<ProbeDbContext>();
+            services.AddScoped<IDomainEventHandler<UserAccountDeletionRequested>, ProbeDeletionHandler>();
             RecordingMailSender.Install(services);
         });
     }
