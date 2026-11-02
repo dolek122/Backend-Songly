@@ -88,9 +88,10 @@ public sealed class SonglyApiFactory : WebApplicationFactory<Program>, IAsyncLif
         builder.UseSetting("ConnectionStrings:Songly", ConnectionString);
         builder.UseSetting("ConnectionStrings:Redis", _redis.GetConnectionString());
 
-        // Off here: it runs at startup and would race tests that insert expired rows on purpose.
-        // The test of the job itself turns it on in an instance of its own.
+        // Off here: they run at startup and would race tests that insert expired rows on purpose.
+        // The tests of the jobs themselves turn them on in an instance of their own.
         builder.UseSetting("Songly:Security:Registration:CleanupEnabled", "false");
+        builder.UseSetting("Songly:Security:SessionCleanup:Enabled", "false");
         builder.ConfigureTestServices(services =>
         {
             services.AddSingleton<IModule, ProbeModule>();

@@ -18,7 +18,7 @@ does; this repository documents *how* it is done in .NET ([ADR 0001](docs/adr/00
 |---|---|---|
 | Common | Error format, request correlation, JSON conventions, validation, e-mail channel, Redis interval gates, domain events, cross-module transactions | ✅ |
 | Migrations | Schema (33 original migrations) | ✅ |
-| Identity | Registration with e-mail verification, login, JWT + rotated refresh tokens with theft detection, password change and reset, live roles, suspensions with appeals, admin roles, account deletion (API and web page) | 🚧 almost done — session cleanup and local dev accounts next |
+| Identity | Registration with e-mail verification, login, JWT + rotated refresh tokens with theft detection, password change and reset, live roles, suspensions with appeals, admin roles, account deletion (API and web page), session cleanup, local test accounts | ✅ |
 | Profile | Public profiles, favourite genres | — |
 | Social | Friends, friend requests, blocking | — |
 | Content | Posts, likes, comments, shares, feed | — |
@@ -87,6 +87,10 @@ confirmation link or a warning). The account does not exist until the address is
 goes out from a background queue, so the response never waits for the mail server
 ([ADR 0005](docs/adr/0005-mail-redis-and-side-effects.md)).
 
+**Background jobs never take the API down.** Cleanup runs in batches, each committed on its own,
+and a failed run is logged and retried at the next interval — in .NET an exception escaping a
+background service would stop the whole application ([ADR 0007](docs/adr/0007-background-jobs.md)).
+
 **Every request is correlated.** It gets an id (or keeps a sanitised one from the client), returned
 in `X-Request-Id` and attached to every log line, so a user's bug report leads to exactly their
 request.
@@ -114,6 +118,19 @@ The API listens on `http://localhost:8080`:
 - `/scalar` — interactive API documentation
 - `/openapi/v1.json` — OpenAPI document
 - `/health` — health check (includes the database)
+
+To click through the mobile app on an Android emulator, run the `Local` environment instead:
+
+```bash
+dotnet run --project src/Songly.Api --launch-profile local
+```
+
+It creates two test accounts at startup, both with the password `Songly123!`:
+`admin@songly.local` (administrator) and `user@songly.local`. A restart leaves them as they are.
+The emulator reaches the API at `http://10.0.2.2:8080`. The passwords are in this repository, so
+the accounts exist only in this environment, and an environment that requires real secrets
+(`Songly:Security:ProductionSecretsRequired=true`) refuses to start with them. The profile listens
+on `localhost` only, so the known admin password is not reachable from the local network.
 
 Without the .NET SDK, the whole stack runs in Docker:
 

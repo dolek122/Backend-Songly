@@ -19,13 +19,15 @@ if (Environment.GetEnvironmentVariable("PORT") is { Length: > 0 } port)
     builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 }
 
-// Structured JSON everywhere except local development, where a human reads the console.
+// Structured JSON everywhere except on a developer's machine, where a human reads the console.
+// "Local" is Development plus the test accounts, for clicking through the mobile app.
+var humanReadableLogs = builder.Environment.IsDevelopment() || builder.Environment.IsEnvironment("Local");
 builder.Services.AddSerilog((_, logger) =>
 {
     logger.ReadFrom.Configuration(builder.Configuration)
         .Enrich.FromLogContext()
         .Enrich.With<DropFrameworkRequestIdEnricher>();
-    if (builder.Environment.IsDevelopment())
+    if (humanReadableLogs)
     {
         logger.WriteTo.Console();
     }
