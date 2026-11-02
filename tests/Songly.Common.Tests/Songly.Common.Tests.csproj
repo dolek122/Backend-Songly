@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Unit tests of Common's internals (the only assembly they are visible to). -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Songly.Common\Songly.Common.csproj" />
+  </ItemGroup>
+
+</Project>

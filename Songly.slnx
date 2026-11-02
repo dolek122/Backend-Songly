@@ -18,6 +18,8 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Songly.ArchitectureTests/Songly.ArchitectureTests.csproj" />
+    <Project Path="tests/Songly.Common.Tests/Songly.Common.Tests.csproj" />
+    <Project Path="tests/Songly.Identity.Tests/Songly.Identity.Tests.csproj" />
     <Project Path="tests/Songly.IntegrationTests/Songly.IntegrationTests.csproj" />
   </Folder>
 </Solution>

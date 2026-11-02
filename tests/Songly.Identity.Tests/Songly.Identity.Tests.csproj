@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Unit tests of the identity module's internals. The module's InternalsVisibleTo opens it to
+    this assembly, and only to it (ADR 0002). Behaviour that crosses HTTP, the database or another
+    module is tested in Songly.IntegrationTests instead.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Modules\Songly.Identity\Songly.Identity.csproj" />
+  </ItemGroup>
+
+</Project>

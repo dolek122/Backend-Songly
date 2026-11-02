@@ -16,9 +16,9 @@ does; this repository documents *how* it is done in .NET ([ADR 0001](docs/adr/00
 
 | Module | Responsibility | Status |
 |---|---|---|
-| Common | Error format, request correlation, JSON conventions | ✅ |
+| Common | Error format, request correlation, JSON conventions, validation, e-mail channel, Redis interval gates, domain events, cross-module transactions | ✅ |
 | Migrations | Schema (33 original migrations) | ✅ |
-| Identity | Registration, login, sessions, password reset, account deletion | ⏳ next |
+| Identity | Registration with e-mail verification, login, JWT + rotated refresh tokens with theft detection, password change and reset, live roles, suspensions with appeals, admin roles, account deletion (API and web page) | 🚧 almost done — session cleanup and local dev accounts next |
 | Profile | Public profiles, favourite genres | — |
 | Social | Friends, friend requests, blocking | — |
 | Content | Posts, likes, comments, shares, feed | — |
@@ -45,7 +45,9 @@ src/
     └── ...
 tests/
 ├── Songly.ArchitectureTests/   module boundary rules (ArchUnitNET)
-└── Songly.IntegrationTests/    the whole app against real Postgres (Testcontainers)
+├── Songly.IntegrationTests/    the whole app against real Postgres and Redis (Testcontainers)
+├── Songly.Common.Tests/        unit tests of Common's internals
+└── Songly.Identity.Tests/      unit tests of one module's internals
 ```
 
 **Each module is its own assembly, and everything in it is `internal`** except its entry point
@@ -69,13 +71,30 @@ route, wrong method, malformed JSON, a non-UUID in the path):
 
 Messages are in Polish on purpose — the mobile app displays them.
 
+**Closed by default.** Every endpoint requires a full, non-suspended account unless it opts out;
+roles are read from the database on every request, so suspending an account or revoking an admin
+role takes effect immediately; the whole admin area is guarded by path. A stolen refresh token
+is detected the moment either copy is reused, and every session of the account is revoked
+([ADR 0004](docs/adr/0004-authentication-and-authorization.md)).
+
+**Deleting an account is one transaction across modules.** Every module deletes its own data in
+reaction to a domain event, inside the same database transaction and before the account row goes;
+if any module fails, nothing is deleted ([ADR 0006](docs/adr/0006-domain-events-and-cross-module-transaction.md)).
+
+**No oracle for who has an account.** Registering a free address and a taken one returns the
+same response in the same time; the only difference is the e-mail the mailbox owner receives (a
+confirmation link or a warning). The account does not exist until the address is confirmed. Mail
+goes out from a background queue, so the response never waits for the mail server
+([ADR 0005](docs/adr/0005-mail-redis-and-side-effects.md)).
+
 **Every request is correlated.** It gets an id (or keeps a sanitised one from the client), returned
 in `X-Request-Id` and attached to every log line, so a user's bug report leads to exactly their
 request.
 
 ## Tech stack
 
-.NET 10 · ASP.NET Core Minimal APIs · PostgreSQL 16 · Npgsql · DbUp · Serilog (JSON logs) ·
+.NET 10 · ASP.NET Core Minimal APIs · EF Core · PostgreSQL 16 · Redis · DbUp · JWT bearer auth · bcrypt ·
+MailKit · Serilog (JSON logs) ·
 OpenAPI + Scalar · xUnit v3 · Testcontainers · ArchUnitNET · Docker · GitHub Actions
 
 ## Running locally
@@ -83,7 +102,7 @@ OpenAPI + Scalar · xUnit v3 · Testcontainers · ArchUnitNET · Docker · GitHu
 Requirements: [.NET 10 SDK](https://dotnet.microsoft.com/download) and Docker.
 
 ```bash
-docker compose up -d postgres
+docker compose up -d postgres redis
 ```
 
 ```bash
@@ -108,7 +127,8 @@ docker compose --profile app up --build
 dotnet test
 ```
 
-Integration tests start PostgreSQL in a container, so Docker must be running. They run against the
+Integration tests start PostgreSQL, Redis and (for the SMTP test) a test mail server in
+containers, so Docker must be running. They run against the
 real database on purpose — an in-memory substitute would lie about how Postgres behaves.
 
 CI (GitHub Actions) checks formatting (`dotnet format`), builds with warnings as errors, runs all

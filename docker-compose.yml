@@ -16,6 +16,17 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    container_name: songly-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   # The API itself, for running the whole stack without the .NET SDK:
   #   docker compose --profile app up --build
   # Left out of the default profile so `dotnet run` can use port 8080 during development.
@@ -26,8 +37,11 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       ConnectionStrings__Songly: "Host=postgres;Port=5432;Database=songly;Username=songly;Password=songly"
+      ConnectionStrings__Redis: "redis:6379"
     ports:
       - "8080:8080"
 

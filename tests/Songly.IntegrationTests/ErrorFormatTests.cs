@@ -16,16 +16,89 @@ public sealed class ErrorFormatTests(SonglyApiFactory factory)
     [Fact]
     public async Task Unknown_route_is_404_not_found()
     {
-        var response = await _client.GetAsync("/no-such-endpoint", TestContext.Current.CancellationToken);
+        var tokens = await _client.LoginAsync(await factory.CreateUserAsync("not-found"));
+
+        var response = await _client.GetAsync("/no-such-endpoint", tokens.AccessToken);
 
         var error = await AssertError(response, HttpStatusCode.NotFound, "NOT_FOUND", "Nie znaleziono zasobu: /no-such-endpoint");
         Assert.Equal("/no-such-endpoint", error.GetProperty("path").GetString());
     }
 
+    /// <summary>
+    /// Without a token, an unknown route is 401 like any closed one, exactly as in the original:
+    /// the closed-by-default policy applies before "not found" does.
+    /// </summary>
+    [Fact]
+    public async Task Unknown_route_without_a_token_is_401()
+    {
+        var response = await _client.GetAsync("/no-such-endpoint", TestContext.Current.CancellationToken);
+
+        await AssertError(response, HttpStatusCode.Unauthorized, "UNAUTHENTICATED", "Wymagane uwierzytelnienie");
+    }
+
+    /// <summary>
+    /// A write rejected by a database constraint is a conflict with the current data, not a server
+    /// failure — usually a race, like two clicks on the same link.
+    /// </summary>
+    [Theory]
+    [InlineData("/probe/conflict/unique")]
+    [InlineData("/probe/conflict/vanished")]
+    public async Task A_write_rejected_by_the_database_is_409_conflict(string probe)
+    {
+        var response = await _client.PostJsonAsync(probe, new { });
+
+        await AssertError(response, HttpStatusCode.Conflict, "CONFLICT", "Żądanie koliduje z bieżącym stanem danych — odśwież i spróbuj ponownie");
+    }
+
+    [Fact]
+    public async Task Invalid_fields_are_400_validation_error_with_every_field_named()
+    {
+        var response = await _client.PostJsonAsync("/probe/validated", new { email = "not-an-address", password = "short" });
+
+        await AssertError(
+            response,
+            HttpStatusCode.BadRequest,
+            "VALIDATION_ERROR",
+            "email: musi być poprawnym adresem e-mail; password: musi mieć od 8 do 72 znaków");
+    }
+
+    [Fact]
+    public async Task Missing_fields_are_400_validation_error()
+    {
+        var response = await _client.PostJsonAsync("/probe/validated", new { });
+
+        await AssertError(response, HttpStatusCode.BadRequest, "VALIDATION_ERROR", "email: nie może być puste; password: nie może być puste");
+    }
+
+    /// <summary>
+    /// 40 Polish letters are well within 72 characters but take 80 bytes; bcrypt would only see
+    /// the first 72, so the limit counts bytes.
+    /// </summary>
+    [Fact]
+    public async Task Byte_limit_counts_utf8_bytes_not_characters()
+    {
+        var response = await _client.PostJsonAsync("/probe/validated", new { email = "a@songly.io", password = new string('ą', 40) });
+
+        await AssertError(
+            response,
+            HttpStatusCode.BadRequest,
+            "VALIDATION_ERROR",
+            "password: może mieć najwyżej 72 bajtów (litery takie jak ą czy ę zajmują po 2)");
+    }
+
+    /// <summary>
+    /// With a token. Routing answers a wrong method with an endpoint of its own, which carries
+    /// none of the route's metadata — so for an anonymous caller the closed-by-default policy
+    /// answers first (401), even on a public route.
+    /// </summary>
     [Fact]
     public async Task Known_route_with_wrong_method_is_405()
     {
-        var response = await _client.DeleteAsync("/probe/query?name=x", TestContext.Current.CancellationToken);
+        var tokens = await _client.LoginAsync(await factory.CreateUserAsync("wrong-method"));
+        using var request = new HttpRequestMessage(HttpMethod.Delete, "/probe/query?name=x");
+        request.Headers.Authorization = new("Bearer", tokens.AccessToken);
+
+        var response = await _client.SendAsync(request, TestContext.Current.CancellationToken);
 
         await AssertError(response, HttpStatusCode.MethodNotAllowed, "METHOD_NOT_ALLOWED", "Metoda DELETE nie jest obsługiwana dla tego zasobu");
     }
@@ -64,10 +137,15 @@ public sealed class ErrorFormatTests(SonglyApiFactory factory)
         await AssertError(response, HttpStatusCode.BadRequest, "MALFORMED_REQUEST", "Treść żądania jest pusta lub nie jest poprawnym JSON-em");
     }
 
+    /// <summary>With a token, for the same reason as the 405 test.</summary>
     [Fact]
     public async Task Body_in_unsupported_format_is_415()
     {
-        var response = await PostRaw("/probe/body", "name=x", "text/plain");
+        var tokens = await _client.LoginAsync(await factory.CreateUserAsync("wrong-content-type"));
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/probe/body") { Content = new StringContent("name=x", Encoding.UTF8, "text/plain") };
+        request.Headers.Authorization = new("Bearer", tokens.AccessToken);
+
+        var response = await _client.SendAsync(request, TestContext.Current.CancellationToken);
 
         await AssertError(response, HttpStatusCode.UnsupportedMediaType, "UNSUPPORTED_MEDIA_TYPE", "Nieobsługiwany format treści żądania");
     }
