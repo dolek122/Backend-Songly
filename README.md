@@ -1,0 +1,122 @@
+# Songly — backend (.NET)
+
+[![CI](https://github.com/dolek122/Backend-Songly/actions/workflows/ci.yml/badge.svg)](https://github.com/dolek122/Backend-Songly/actions/workflows/ci.yml)
+
+Songly is a social app built around music: posts, likes and comments, friends, live "now playing"
+status from Spotify, genre-based matching and topic communities with their own moderation.
+
+This repository is a **.NET 10 port of the original Spring Boot backend**
+([`dolek122/Songly-backend`](https://github.com/dolek122/Songly-backend)). It keeps the same REST
+contract and the same database schema, so the existing mobile app
+([`dolek122/Songly-mobile`](https://github.com/dolek122/Songly-mobile)) works against either one.
+The original's architecture decision records remain the source of truth for *what* the system
+does; this repository documents *how* it is done in .NET ([ADR 0001](docs/adr/0001-port-to-dotnet.md)).
+
+## Status
+
+| Module | Responsibility | Status |
+|---|---|---|
+| Common | Error format, request correlation, JSON conventions | ✅ |
+| Migrations | Schema (33 original migrations) | ✅ |
+| Identity | Registration, login, sessions, password reset, account deletion | ⏳ next |
+| Profile | Public profiles, favourite genres | — |
+| Social | Friends, friend requests, blocking | — |
+| Content | Posts, likes, comments, shares, feed | — |
+| NowPlaying | Spotify integration, live status | — |
+| Matching | Genre-based matching | — |
+| Community | Communities, membership, moderation | — |
+| Notification | Inbox, e-mail, push | — |
+| Analytics | PII-free event counters | — |
+| ModerationLog | History of moderation decisions | — |
+
+## Architecture
+
+A **modular monolith**: one deployable application, split into domain modules with explicit
+boundaries, so that a module can be extracted into a service later without rewriting the rest.
+
+```
+src/
+├── Songly.Api/            host: composition root, pipeline, health, OpenAPI
+├── Songly.Common/         infrastructure only — knows nothing about the domain
+├── Songly.Migrations/     original SQL migrations + DbUp runner
+└── Modules/
+    ├── Songly.Identity/   one assembly per module
+    ├── Songly.Profile/
+    └── ...
+tests/
+├── Songly.ArchitectureTests/   module boundary rules (ArchUnitNET)
+└── Songly.IntegrationTests/    the whole app against real Postgres (Testcontainers)
+```
+
+**Each module is its own assembly, and everything in it is `internal`** except its entry point
+(`IModule`) and its `Contracts` namespace. Another module cannot touch an entity, a repository or a
+service — the compiler refuses. Cycles between modules are impossible because project references
+cannot form one. What the compiler cannot check, the architecture tests do: no public type outside
+`Contracts`, no `InternalsVisibleTo` back doors, endpoints never see entities, every module
+registered. Each rule was seen failing on a deliberate violation before it was accepted
+([ADR 0002](docs/adr/0002-module-per-assembly.md)).
+
+**The schema is not regenerated from an ORM model.** The original Flyway scripts run verbatim
+through DbUp, ordered by version, under a Postgres advisory lock
+([ADR 0003](docs/adr/0003-migrations-with-dbup.md)).
+
+**One error format for everything**, including errors the framework produces on its own (unknown
+route, wrong method, malformed JSON, a non-UUID in the path):
+
+```json
+{ "code": "NOT_FOUND", "message": "Nie znaleziono zasobu: /api/v1/nope", "timestamp": "2026-11-02T12:00:00.123Z", "path": "/api/v1/nope" }
+```
+
+Messages are in Polish on purpose — the mobile app displays them.
+
+**Every request is correlated.** It gets an id (or keeps a sanitised one from the client), returned
+in `X-Request-Id` and attached to every log line, so a user's bug report leads to exactly their
+request.
+
+## Tech stack
+
+.NET 10 · ASP.NET Core Minimal APIs · PostgreSQL 16 · Npgsql · DbUp · Serilog (JSON logs) ·
+OpenAPI + Scalar · xUnit v3 · Testcontainers · ArchUnitNET · Docker · GitHub Actions
+
+## Running locally
+
+Requirements: [.NET 10 SDK](https://dotnet.microsoft.com/download) and Docker.
+
+```bash
+docker compose up -d postgres
+```
+
+```bash
+dotnet run --project src/Songly.Api
+```
+
+The API listens on `http://localhost:8080`:
+
+- `/scalar` — interactive API documentation
+- `/openapi/v1.json` — OpenAPI document
+- `/health` — health check (includes the database)
+
+Without the .NET SDK, the whole stack runs in Docker:
+
+```bash
+docker compose --profile app up --build
+```
+
+## Tests
+
+```bash
+dotnet test
+```
+
+Integration tests start PostgreSQL in a container, so Docker must be running. They run against the
+real database on purpose — an in-memory substitute would lie about how Postgres behaves.
+
+CI (GitHub Actions) checks formatting (`dotnet format`), builds with warnings as errors, runs all
+tests and builds the Docker image on every push and pull request.
+
+## Documentation
+
+- [`docs/adr`](docs/adr) — decisions specific to this .NET implementation
+- [`docs/api`](docs/api) — the API contract inherited from the original backend
+- [Original ADRs](https://github.com/dolek122/Songly-backend/tree/main/docs/adr) — the reasoning
+  behind the system's behaviour (in Polish)

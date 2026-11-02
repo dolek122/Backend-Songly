@@ -1,0 +1,35 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: songly-postgres
+    environment:
+      POSTGRES_DB: songly
+      POSTGRES_USER: songly
+      POSTGRES_PASSWORD: songly
+    ports:
+      - "5432:5432"
+    volumes:
+      - songly-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U songly -d songly"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # The API itself, for running the whole stack without the .NET SDK:
+  #   docker compose --profile app up --build
+  # Left out of the default profile so `dotnet run` can use port 8080 during development.
+  api:
+    profiles: ["app"]
+    build: .
+    container_name: songly-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__Songly: "Host=postgres;Port=5432;Database=songly;Username=songly;Password=songly"
+    ports:
+      - "8080:8080"
+
+volumes:
+  songly-postgres-data:

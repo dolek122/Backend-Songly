@@ -1,0 +1,12 @@
+-- Deduplikacja powiadomień o stanie, który da się cofnąć i przywrócić (ADR 0035).
+--
+-- Każdy lajk, udostępnienie, dołączenie do społeczności i zaproszenie do
+-- znajomych pyta teraz przed zapisem, czy adresat już dostał od tego aktora
+-- takie samo powiadomienie. Indeks (user_id, created_at) zawęża tylko do
+-- skrzynki adresata, a skrzynka popularnego autora to tysiące wierszy.
+--
+-- Celowo zwykły indeks, nie unikalny: dla zaproszeń dedup dotyczy wyłącznie
+-- nieprzeczytanych, więc unikalność nie jest własnością danych. Wyścig dwóch
+-- równoległych zapisów może zostawić duplikat — to samo, co działo się przed tą
+-- zmianą w każdym przypadku, więc akceptowalne.
+CREATE INDEX idx_notifications_dedup ON notifications (user_id, actor_id, type);

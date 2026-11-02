@@ -1,0 +1,15 @@
+<Project>
+  <!--
+    Every module is its own assembly. Everything inside is `internal` by default;
+    only the module entry point (IModule) and the Contracts namespace are public.
+    That makes the compiler the first line of defence for module boundaries
+    (see docs/adr/0002). The architecture tests are the second.
+  -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)../Songly.Common/Songly.Common.csproj" />
+    <InternalsVisibleTo Include="$(AssemblyName).Tests" />
+  </ItemGroup>
+</Project>

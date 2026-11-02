@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore Songly.slnx
+
+      - name: Check formatting
+        run: dotnet format Songly.slnx --verify-no-changes --no-restore
+
+      - name: Build
+        run: dotnet build Songly.slnx -c Release --no-restore
+
+      # Integration tests start Postgres through Testcontainers; the runner has Docker.
+      - name: Test
+        run: dotnet test --solution Songly.slnx -c Release --no-build
+
+      - name: Build Docker image
+        run: docker build -t songly-api .

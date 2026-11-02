@@ -1,0 +1,23 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Songly.Api/Songly.Api.csproj" />
+    <Project Path="src/Songly.Common/Songly.Common.csproj" />
+    <Project Path="src/Songly.Migrations/Songly.Migrations.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/">
+    <Project Path="src/Modules/Songly.Analytics/Songly.Analytics.csproj" />
+    <Project Path="src/Modules/Songly.Community/Songly.Community.csproj" />
+    <Project Path="src/Modules/Songly.Content/Songly.Content.csproj" />
+    <Project Path="src/Modules/Songly.Identity/Songly.Identity.csproj" />
+    <Project Path="src/Modules/Songly.Matching/Songly.Matching.csproj" />
+    <Project Path="src/Modules/Songly.ModerationLog/Songly.ModerationLog.csproj" />
+    <Project Path="src/Modules/Songly.Notification/Songly.Notification.csproj" />
+    <Project Path="src/Modules/Songly.NowPlaying/Songly.NowPlaying.csproj" />
+    <Project Path="src/Modules/Songly.Profile/Songly.Profile.csproj" />
+    <Project Path="src/Modules/Songly.Social/Songly.Social.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Songly.ArchitectureTests/Songly.ArchitectureTests.csproj" />
+    <Project Path="tests/Songly.IntegrationTests/Songly.IntegrationTests.csproj" />
+  </Folder>
+</Solution>
