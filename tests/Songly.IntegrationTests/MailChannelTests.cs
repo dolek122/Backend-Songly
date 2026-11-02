@@ -42,16 +42,17 @@ public sealed class MailChannelTests(SonglyApiFactory factory)
 
     /// <summary>
     /// SMTP without a host must not start: an instance that only looks as if it sent mail is an
-    /// outage nobody notices until the first "I never got the link".
+    /// outage nobody notices until the first "I never got the link". Only the failure is asserted
+    /// — the message is racy through <c>WebApplicationFactory</c> (see <c>AccessTokenTests</c>) and
+    /// asserted in <c>MailOptionsValidatorTests</c> instead. The SMTP test above, with a host,
+    /// shows that the host is what decides.
     /// </summary>
     [Fact]
     public void Smtp_without_a_host_refuses_to_start()
     {
         using var app = factory.WithSettings(("Songly:Mail:Provider", "smtp"), ("Songly:Mail:Smtp:Host", ""));
 
-        var failure = Assert.ThrowsAny<Exception>(() => app.CreateClient());
-
-        Assert.Contains("Songly:Mail:Smtp:Host", failure.ToString(), StringComparison.Ordinal);
+        Assert.ThrowsAny<Exception>(() => app.CreateClient());
     }
 
     [Fact]

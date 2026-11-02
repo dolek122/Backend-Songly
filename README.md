@@ -18,7 +18,7 @@ does; this repository documents *how* it is done in .NET ([ADR 0001](docs/adr/00
 |---|---|---|
 | Common | Error format, request correlation, JSON conventions, validation, e-mail channel, Redis interval gates | ✅ |
 | Migrations | Schema (33 original migrations) | ✅ |
-| Identity | Registration with e-mail verification, login, JWT + rotated refresh tokens with theft detection, password change, live roles, suspension and admin enforcement | 🚧 in progress — password reset, account deletion, suspensions and admin next |
+| Identity | Registration with e-mail verification, login, JWT + rotated refresh tokens with theft detection, password change and reset, live roles, suspension and admin enforcement | 🚧 in progress — account deletion, suspensions and admin next |
 | Profile | Public profiles, favourite genres | — |
 | Social | Friends, friend requests, blocking | — |
 | Content | Posts, likes, comments, shares, feed | — |
@@ -45,7 +45,9 @@ src/
     └── ...
 tests/
 ├── Songly.ArchitectureTests/   module boundary rules (ArchUnitNET)
-└── Songly.IntegrationTests/    the whole app against real Postgres (Testcontainers)
+├── Songly.IntegrationTests/    the whole app against real Postgres and Redis (Testcontainers)
+├── Songly.Common.Tests/        unit tests of Common's internals
+└── Songly.Identity.Tests/      unit tests of one module's internals
 ```
 
 **Each module is its own assembly, and everything in it is `internal`** except its entry point

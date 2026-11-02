@@ -22,6 +22,7 @@ internal sealed class IdentityMetrics
     private readonly Counter<long> _logins;
     private readonly Counter<long> _refreshes;
     private readonly Counter<long> _registrations;
+    private readonly Counter<long> _passwordResets;
 
     public IdentityMetrics(IMeterFactory meterFactory)
     {
@@ -29,6 +30,7 @@ internal sealed class IdentityMetrics
         _logins = meter.CreateCounter<long>("songly.auth.login.attempts");
         _refreshes = meter.CreateCounter<long>("songly.auth.refresh.attempts");
         _registrations = meter.CreateCounter<long>("songly.auth.registration.attempts");
+        _passwordResets = meter.CreateCounter<long>("songly.auth.password-reset.attempts");
     }
 
     public void LoginSucceeded() => _logins.Add(1, Outcome("success"));
@@ -43,6 +45,13 @@ internal sealed class IdentityMetrics
     /// someone is sweeping addresses, even though the responses do not help them.
     /// </summary>
     public void Registration(string outcome) => _registrations.Add(1, Outcome(outcome));
+
+    /// <summary>
+    /// Deliberately no series for "no such account": like login, nothing may be read from these
+    /// counters about which accounts exist. <c>throttled</c> rising faster than <c>requested</c>
+    /// is enough to spot abuse.
+    /// </summary>
+    public void PasswordReset(string outcome) => _passwordResets.Add(1, Outcome(outcome));
 
     private static KeyValuePair<string, object?> Outcome(string value) => new("outcome", value);
 }

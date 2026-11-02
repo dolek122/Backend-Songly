@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
 using Songly.Common.Web;
+using Songly.Identity.PasswordReset;
 using Songly.Identity.Registration;
 using Songly.Identity.Sessions;
 
@@ -41,6 +42,23 @@ internal static class AuthEndpoints
         auth.MapPost("/logout", async Task<NoContent> (RefreshRequest request, AuthService service, CancellationToken cancellationToken) =>
             {
                 await service.LogoutAsync(request, cancellationToken);
+                return TypedResults.NoContent();
+            })
+            .AllowAnonymous();
+
+        // Password reset is by definition for someone who cannot log in. 202 always — for an
+        // unknown address and for a request the resend interval silenced, too.
+        auth.MapPost("/password/reset-request", async Task<Accepted> (PasswordResetRequest request, PasswordResetService service, CancellationToken cancellationToken) =>
+            {
+                await service.RequestResetAsync(request, cancellationToken);
+                return TypedResults.Accepted((string?)null);
+            })
+            .AllowAnonymous();
+
+        // No token pair: a reset revokes every session, and the user logs in with the new password.
+        auth.MapPost("/password/reset", async Task<NoContent> (PasswordResetConfirmRequest request, PasswordResetService service, CancellationToken cancellationToken) =>
+            {
+                await service.ResetPasswordAsync(request, cancellationToken);
                 return TypedResults.NoContent();
             })
             .AllowAnonymous();

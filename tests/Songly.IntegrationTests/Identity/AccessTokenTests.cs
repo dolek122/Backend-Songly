@@ -5,7 +5,10 @@ using Microsoft.AspNetCore.Hosting;
 
 namespace Songly.IntegrationTests.Identity;
 
-/// <summary>Ported from the original <c>JwtServiceClaimsTest</c> and <c>JwtServiceSecretTest</c>.</summary>
+/// <summary>
+/// Ported from the original <c>JwtServiceClaimsTest</c> and <c>JwtServiceSecretTest</c> (the latter
+/// together with <c>JwtOptionsValidatorTests</c>).
+/// </summary>
 public sealed class AccessTokenTests(SonglyApiFactory factory)
 {
     private const string DevSecret = "dev-only-secret-change-me-in-every-real-environment-32bytes+";
@@ -33,14 +36,19 @@ public sealed class AccessTokenTests(SonglyApiFactory factory)
     /// included. An environment that requires real secrets must refuse to start with it — at
     /// startup, not at the first token.
     /// </summary>
+    /// <remarks>
+    /// Only the failure itself is asserted, not its message. When an application fails this early,
+    /// <c>WebApplicationFactory</c> races its own startup thread: sometimes the host is already
+    /// disposed and the factory reports <c>ObjectDisposedException</c> instead of the real cause.
+    /// The message is asserted deterministically in <c>JwtOptionsValidatorTests</c>; the passing
+    /// cases below show that the setting under test is what decides.
+    /// </remarks>
     [Fact]
     public void The_app_refuses_to_start_with_the_dev_secret_where_real_secrets_are_required()
     {
         using var app = WithSecurity(DevSecret, productionSecretsRequired: true);
 
-        var failure = Assert.ThrowsAny<Exception>(() => app.CreateClient());
-
-        Assert.Contains("Songly:Security:Jwt:Secret", failure.ToString(), StringComparison.Ordinal);
+        Assert.ThrowsAny<Exception>(() => app.CreateClient());
     }
 
     [Fact]
@@ -59,15 +67,16 @@ public sealed class AccessTokenTests(SonglyApiFactory factory)
         app.CreateClient().Dispose();
     }
 
-    /// <summary>HS256 needs at least 256 bits of key; a shorter one must fail at startup, not on the first login.</summary>
+    /// <summary>
+    /// HS256 needs at least 256 bits of key; a shorter one must fail at startup, not at the first
+    /// login. The message is asserted in <c>JwtOptionsValidatorTests</c>, for the reason above.
+    /// </summary>
     [Fact]
     public void A_secret_shorter_than_32_bytes_is_rejected_at_startup()
     {
         using var app = WithSecurity("too-short", productionSecretsRequired: false);
 
-        var failure = Assert.ThrowsAny<Exception>(() => app.CreateClient());
-
-        Assert.Contains("at least 32 bytes", failure.ToString(), StringComparison.Ordinal);
+        Assert.ThrowsAny<Exception>(() => app.CreateClient());
     }
 
     private Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<Program> WithSecurity(string secret, bool productionSecretsRequired) =>

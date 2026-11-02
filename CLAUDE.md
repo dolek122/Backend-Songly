@@ -78,6 +78,8 @@ The repo uses Microsoft.Testing.Platform (`global.json`). Filter with
 
 - Integration tests run the whole application against real Postgres (Testcontainers), never an
   in-memory substitute. `SonglyApiFactory` is shared by the test assembly.
+- Pure logic with no HTTP, database or other module involved (formatting, calculations) gets unit
+  tests in `tests/Songly.<Module>.Tests` — the only assembly the module's internals are visible to.
 - Create accounts with `factory.CreateUserAsync()` and log in with `client.LoginAsync(user)`;
   use `factory.ExecuteSqlAsync` only for state the API cannot produce yet or whose age is the
   subject of the test. Every test makes its own accounts — the database is shared.

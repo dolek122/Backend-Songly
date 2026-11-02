@@ -126,7 +126,7 @@ internal sealed partial class AuthService(
     /// </remarks>
     private async Task<RefreshTokenReuseDetectedException> ReuseDetectedAsync(Guid userId, CancellationToken cancellationToken)
     {
-        var revoked = await RevokeAllSessionsAsync(userId, cancellationToken);
+        var revoked = await db.Sessions.RevokeAllAsync(userId, time.GetUtcNow(), cancellationToken);
         metrics.Refresh(RefreshOutcome.Reuse);
         LogReuseDetected(userId, revoked);
         return new RefreshTokenReuseDetectedException();
@@ -191,23 +191,11 @@ internal sealed partial class AuthService(
 
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
-        var revoked = await RevokeAllSessionsAsync(userId, cancellationToken);
-        await db.Database.ExecuteSqlAsync($"DELETE FROM password_reset_tokens WHERE user_id = {userId}", cancellationToken);
+        var revoked = await db.Sessions.RevokeAllAsync(userId, time.GetUtcNow(), cancellationToken);
+        await db.PasswordResetTokens.Where(t => t.UserId == userId).ExecuteDeleteAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
         LogPasswordChanged(userId, revoked);
-    }
-
-    /// <summary>
-    /// One bulk update, not a loop over entities: the number of sessions per account has no upper
-    /// bound, and nothing hangs on a session's lifecycle.
-    /// </summary>
-    private Task<int> RevokeAllSessionsAsync(Guid userId, CancellationToken cancellationToken)
-    {
-        var now = time.GetUtcNow();
-        return db.Sessions
-            .Where(s => s.UserId == userId && !s.Revoked)
-            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Revoked, true).SetProperty(x => x.RevokedAt, now), cancellationToken);
     }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "User {UserId} logged in")]
