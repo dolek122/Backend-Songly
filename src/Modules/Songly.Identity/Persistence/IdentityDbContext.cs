@@ -16,6 +16,8 @@ internal sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> opti
 
     public DbSet<PendingRegistration> PendingRegistrations => Set<PendingRegistration>();
 
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<User>(user =>
@@ -34,6 +36,12 @@ internal sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> opti
         {
             pending.ToTable("pending_registrations");
             pending.HasKey(p => p.Id);
+        });
+
+        modelBuilder.Entity<PasswordResetToken>(token =>
+        {
+            token.ToTable("password_reset_tokens");
+            token.HasKey(t => t.Id);
         });
     }
 }
