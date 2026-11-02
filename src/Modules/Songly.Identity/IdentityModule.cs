@@ -6,6 +6,7 @@ using Songly.Common.Modules;
 using Songly.Common.Persistence;
 using Songly.Identity.Http;
 using Songly.Identity.Persistence;
+using Songly.Identity.Registration;
 using Songly.Identity.Security;
 using Songly.Identity.Sessions;
 
@@ -25,6 +26,11 @@ public sealed class IdentityModule : IModule
         services.AddSingleton<IdentityMetrics>();
         services.AddScoped<TokenIssuer>();
         services.AddScoped<AuthService>();
+
+        services.AddOptions<RegistrationOptions>().Bind(configuration.GetSection(RegistrationOptions.Section));
+        services.AddScoped<RegistrationMailer>();
+        services.AddScoped<RegistrationService>();
+        services.AddHostedService<PendingRegistrationCleanupJob>();
     }
 
     public void UsePipeline(IApplicationBuilder app) => app.UseSonglyAuthentication();

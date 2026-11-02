@@ -2,7 +2,9 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 
 namespace Songly.Common.Web;
 
@@ -24,11 +26,37 @@ internal sealed partial class GlobalExceptionHandler(ILogger<GlobalExceptionHand
         {
             ApiException api => (api.StatusCode, api.Code, api.Message),
             BadHttpRequestException badRequest => MapBadRequest(badRequest),
+            DbUpdateConcurrencyException => Conflict(context, exception),
+            DbUpdateException { InnerException: PostgresException { SqlState: ['2', '3', ..] } } => Conflict(context, exception),
             _ => Unexpected(context, exception),
         };
 
         await ApiErrorWriter.WriteAsync(context, status, code, message);
         return true;
+    }
+
+    /// <summary>
+    /// A write rejected by a database constraint (SQLSTATE class 23: unique, foreign key, check),
+    /// or an update/delete that found its row already gone.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// 409, not 500: the request collides with the current state of the data, the server works.
+    /// Usually it is a race — a double tap on "like" sends two requests, both see "not liked yet",
+    /// and the second INSERT hits the primary key; or two clicks on the same verification link.
+    /// Answering 500 made every such race look like an outage and told the client "try later"
+    /// instead of "refresh".
+    /// </para>
+    /// <para>
+    /// The stack trace stays in the log as a warning, because the same symptom comes from a module
+    /// that forgot to delete its rows when an account is deleted — that must stay visible. The
+    /// message says nothing specific: constraint names describe the schema.
+    /// </para>
+    /// </remarks>
+    private (int, string, string) Conflict(HttpContext context, Exception exception)
+    {
+        logger.LogWarning(exception, "Write rejected by a database constraint: {Method} {Path}", context.Request.Method, context.Request.Path);
+        return (StatusCodes.Status409Conflict, "CONFLICT", "Żądanie koliduje z bieżącym stanem danych — odśwież i spróbuj ponownie");
     }
 
     private (int, string, string) Unexpected(HttpContext context, Exception exception)

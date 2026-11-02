@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
 using Songly.Common.Web;
+using Songly.Identity.Registration;
 using Songly.Identity.Sessions;
 
 namespace Songly.Identity.Http;
@@ -13,6 +14,20 @@ internal static class AuthEndpoints
     public static void MapAuthEndpoints(this IEndpointRouteBuilder endpoints)
     {
         var auth = endpoints.MapGroup("/api/v1/auth").WithTags("Auth");
+
+        // 202 always — also when the address already has an account. Answering differently would
+        // make this endpoint a list of who has an account here. No tokens: the account does not
+        // exist until the address is confirmed.
+        auth.MapPost("/register", async Task<Accepted> (RegisterRequest request, RegistrationService service, CancellationToken cancellationToken) =>
+            {
+                await service.RegisterAsync(request, cancellationToken);
+                return TypedResults.Accepted((string?)null);
+            })
+            .AllowAnonymous();
+
+        auth.MapPost("/register/verify", (VerifyEmailRequest request, RegistrationService service, CancellationToken cancellationToken)
+                => service.VerifyAsync(request, cancellationToken))
+            .AllowAnonymous();
 
         auth.MapPost("/login", (LoginRequest request, AuthService service, CancellationToken cancellationToken)
                 => service.LoginAsync(request, cancellationToken))

@@ -6,18 +6,22 @@ public static class TestAccounts
 {
     public const string DefaultPassword = "password123";
 
+    /// <summary>An address no other test uses — the database is shared by the whole suite.</summary>
+    public static string UniqueEmail(string prefix) => $"{prefix}-{Guid.NewGuid():N}@songly.io";
+
     /// <summary>
     /// Creates an account directly in the database.
     /// </summary>
     /// <remarks>
-    /// Registration (with e-mail verification) is not ported yet; once it is, tests that need a
-    /// complete account — with a profile — will go through it instead. The hash uses bcrypt cost
+    /// Faster than registering and verifying, and enough while no other module reacts to a new
+    /// account. Once the profile module is ported (accounts get a profile when they are created),
+    /// tests that need a complete account go through registration instead. The hash uses bcrypt cost
     /// 4 instead of the application's 10: verification time depends on the cost stored in the
     /// hash, and the suite creates hundreds of accounts.
     /// </remarks>
     public static async Task<TestUser> CreateUserAsync(this SonglyApiFactory factory, string prefix = "user", string password = DefaultPassword)
     {
-        var user = new TestUser(Guid.NewGuid(), $"{prefix}-{Guid.NewGuid():N}@songly.io", password);
+        var user = new TestUser(Guid.NewGuid(), UniqueEmail(prefix), password);
         await factory.ExecuteSqlAsync(
             "INSERT INTO users (id, email, password_hash, created_at) VALUES (@id, @email, @hash, now())",
             ("id", user.Id),

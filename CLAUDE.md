@@ -25,7 +25,7 @@ concern per change).
 dotnet build Songly.slnx
 dotnet test                                   # needs Docker (Testcontainers)
 dotnet format Songly.slnx --verify-no-changes # CI fails on unformatted code
-docker compose up -d postgres && dotnet run --project src/Songly.Api
+docker compose up -d postgres redis && dotnet run --project src/Songly.Api
 ```
 
 The repo uses Microsoft.Testing.Platform (`global.json`). Filter with
@@ -67,6 +67,11 @@ The repo uses Microsoft.Testing.Platform (`global.json`). Filter with
   `Size`, `MaxUtf8Bytes` — named after the original's Bean Validation). Validation runs for every
   endpoint automatically; declare the attribute, do not call anything. Put the attributes on
   properties (`init` properties, not positional record parameters).
+- Side effects (e-mail, later push) go **after** the save that makes them true — the order of
+  statements is the "after commit" (ADR 0005). Send mail through `IMailSender`; a delivery
+  failure must never change the HTTP response.
+- "At most once per interval" goes through `IIntervalGate` (Redis, fail-open). Never make a
+  request depend on Redis being up.
 - Warnings are errors. Fix the cause; suppress only with a comment saying why.
 
 ## Tests
@@ -76,6 +81,9 @@ The repo uses Microsoft.Testing.Platform (`global.json`). Filter with
 - Create accounts with `factory.CreateUserAsync()` and log in with `client.LoginAsync(user)`;
   use `factory.ExecuteSqlAsync` only for state the API cannot produce yet or whose age is the
   subject of the test. Every test makes its own accounts — the database is shared.
+- Read tokens from the e-mail the app sent (`factory.Mails.TokenSentTo(email)`), never from the
+  database. A test needing other settings runs against `factory.WithSettings(...)` — a second
+  app instance on the same database and Redis. Background jobs are off in the shared instance.
 - Run a new test class on its own too (`--filter-class`): passing only as part of the full suite
   means it depends on another test having run first.
 - When porting a module, port the scenarios of the original's tests for it — they are the
