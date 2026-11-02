@@ -42,7 +42,9 @@ The repo uses Microsoft.Testing.Platform (`global.json`). Filter with
   reference. The dependency graph must stay acyclic — the compiler enforces it. If a dependency
   would create a cycle, the original solved it already; look at how.
 - `InternalsVisibleTo` only to the module's own `<Module>.Tests` assembly.
-- Register every new module in `ModuleCatalog`.
+- Register every new module in `ModuleCatalog`. A module that needs middleware implements
+  `IModule.UsePipeline` (identity does: authentication, authorization).
+- Each module has its own `DbContext` (`AddModuleDbContext<T>`), mapping only its own tables.
 - `Songly.Common` is infrastructure only and must not know any module.
 - When adding an architecture rule, make it fail once with a deliberate violation first.
 
@@ -58,12 +60,24 @@ The repo uses Microsoft.Testing.Platform (`global.json`). Filter with
 - Logs: never log e-mail addresses, request bodies, passwords or tokens. Identify users by id.
 - Migrations: never edit an applied script (DbUp keeps no checksums, ADR 0003). New changes are
   new scripts, `V34__...` onwards, in plain SQL.
+- Endpoints are **closed by default**: the fallback policy requires the `USER` role. Public
+  endpoints say `.AllowAnonymous()`; everything under `/api/v1/admin` is admin-only by path
+  (ADR 0004). Read the caller's id with `ClaimsPrincipal.GetUserId()`.
+- Request records validate with `Songly.Common.Validation` attributes (`NotBlank`, `Email`,
+  `Size`, `MaxUtf8Bytes` — named after the original's Bean Validation). Validation runs for every
+  endpoint automatically; declare the attribute, do not call anything. Put the attributes on
+  properties (`init` properties, not positional record parameters).
 - Warnings are errors. Fix the cause; suppress only with a comment saying why.
 
 ## Tests
 
 - Integration tests run the whole application against real Postgres (Testcontainers), never an
   in-memory substitute. `SonglyApiFactory` is shared by the test assembly.
+- Create accounts with `factory.CreateUserAsync()` and log in with `client.LoginAsync(user)`;
+  use `factory.ExecuteSqlAsync` only for state the API cannot produce yet or whose age is the
+  subject of the test. Every test makes its own accounts — the database is shared.
+- Run a new test class on its own too (`--filter-class`): passing only as part of the full suite
+  means it depends on another test having run first.
 - When porting a module, port the scenarios of the original's tests for it — they are the
   executable specification of the behaviour.
 - A test that cannot fail proves nothing. For a new safeguard, break the code once and watch the

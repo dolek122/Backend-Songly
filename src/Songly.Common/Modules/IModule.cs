@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,6 +19,18 @@ public interface IModule
     /// <summary>Registers the module's services in the shared container.</summary>
     void Register(IServiceCollection services, IConfiguration configuration);
 
-    /// <summary>Maps the module's HTTP endpoints.</summary>
+    /// <summary>
+    /// Middleware the module contributes to the request pipeline. It runs after the shared web
+    /// infrastructure (request id, error handling) and before the endpoints, in the order of
+    /// the module catalog. Most modules contribute none.
+    /// </summary>
+    void UsePipeline(IApplicationBuilder app)
+    {
+    }
+
+    /// <summary>
+    /// Maps the module's HTTP endpoints. <paramref name="endpoints"/> is a group with request
+    /// validation already applied.
+    /// </summary>
     void MapEndpoints(IEndpointRouteBuilder endpoints);
 }

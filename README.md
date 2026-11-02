@@ -18,7 +18,7 @@ does; this repository documents *how* it is done in .NET ([ADR 0001](docs/adr/00
 |---|---|---|
 | Common | Error format, request correlation, JSON conventions | ✅ |
 | Migrations | Schema (33 original migrations) | ✅ |
-| Identity | Registration, login, sessions, password reset, account deletion | ⏳ next |
+| Identity | Login, JWT + rotated refresh tokens with theft detection, password change, live roles, suspension and admin enforcement | 🚧 in progress — registration, password reset, account deletion, suspensions and admin next |
 | Profile | Public profiles, favourite genres | — |
 | Social | Friends, friend requests, blocking | — |
 | Content | Posts, likes, comments, shares, feed | — |
@@ -69,13 +69,20 @@ route, wrong method, malformed JSON, a non-UUID in the path):
 
 Messages are in Polish on purpose — the mobile app displays them.
 
+**Closed by default.** Every endpoint requires a full, non-suspended account unless it opts out;
+roles are read from the database on every request, so suspending an account or revoking an admin
+role takes effect immediately; the whole admin area is guarded by path. A stolen refresh token
+is detected the moment either copy is reused, and every session of the account is revoked
+([ADR 0004](docs/adr/0004-authentication-and-authorization.md)).
+
 **Every request is correlated.** It gets an id (or keeps a sanitised one from the client), returned
 in `X-Request-Id` and attached to every log line, so a user's bug report leads to exactly their
 request.
 
 ## Tech stack
 
-.NET 10 · ASP.NET Core Minimal APIs · PostgreSQL 16 · Npgsql · DbUp · Serilog (JSON logs) ·
+.NET 10 · ASP.NET Core Minimal APIs · EF Core · PostgreSQL 16 · DbUp · JWT bearer auth · bcrypt ·
+Serilog (JSON logs) ·
 OpenAPI + Scalar · xUnit v3 · Testcontainers · ArchUnitNET · Docker · GitHub Actions
 
 ## Running locally

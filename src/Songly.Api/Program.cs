@@ -1,9 +1,10 @@
-using Npgsql;
 using Scalar.AspNetCore;
 using Serilog;
 using Serilog.Formatting.Compact;
 using Songly.Api;
 using Songly.Common.Modules;
+using Songly.Common.Persistence;
+using Songly.Common.Validation;
 using Songly.Common.Web;
 using Songly.Migrations;
 
@@ -31,7 +32,7 @@ builder.Services.AddSerilog((_, logger) =>
     }
 });
 
-builder.Services.AddSingleton(services => NpgsqlDataSource.Create(ConnectionString(services.GetRequiredService<IConfiguration>())));
+builder.Services.AddSonglyDatabase();
 builder.Services.AddSonglyWeb();
 builder.Services.AddOpenApi();
 builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database");
@@ -46,27 +47,31 @@ var app = builder.Build();
 
 if (app.Configuration.GetValue("Database:MigrateOnStartup", defaultValue: true))
 {
-    DatabaseMigrator.Migrate(ConnectionString(app.Configuration), app.Services.GetRequiredService<ILoggerFactory>());
+    DatabaseMigrator.Migrate(DatabaseExtensions.ConnectionString(app.Configuration), app.Services.GetRequiredService<ILoggerFactory>());
 }
 
-app.UseSonglyWeb();
-
-app.MapOpenApi();
-app.MapScalarApiReference();
-app.MapHealthChecks("/health");
-
-// Mapped from the container rather than from ModuleCatalog, so the tests can plug in an extra
+// Taken from the container rather than from ModuleCatalog, so the tests can plug in an extra
 // module with endpoints that exist only to exercise the shared infrastructure.
-foreach (var module in app.Services.GetServices<IModule>())
+var modules = app.Services.GetServices<IModule>().ToList();
+
+app.UseSonglyWeb();
+foreach (var module in modules)
 {
-    module.MapEndpoints(app);
+    module.UsePipeline(app);
+}
+
+// Operational endpoints are public: a load balancer probing /health has no token.
+app.MapOpenApi().AllowAnonymous();
+app.MapScalarApiReference().AllowAnonymous();
+app.MapHealthChecks("/health").AllowAnonymous();
+
+var api = app.MapGroup(string.Empty).ValidateRequests();
+foreach (var module in modules)
+{
+    module.MapEndpoints(api);
 }
 
 app.Run();
-
-static string ConnectionString(IConfiguration configuration) =>
-    configuration.GetConnectionString("Songly")
-    ?? throw new InvalidOperationException("ConnectionStrings:Songly is not configured");
 
 /// <summary>The application's entry point; public so the integration tests can host it.</summary>
 public partial class Program;
