@@ -17,9 +17,9 @@ internal sealed class User
         PasswordHash = string.Empty;
     }
 
-    public User(Guid id, string email, string passwordHash, DateTimeOffset createdAt)
+    public User(string email, string passwordHash, DateTimeOffset createdAt)
     {
-        Id = id;
+        Id = Guid.NewGuid();
         Email = email;
         PasswordHash = passwordHash;
         CreatedAt = createdAt;

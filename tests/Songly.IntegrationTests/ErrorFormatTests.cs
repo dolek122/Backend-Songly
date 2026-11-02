@@ -36,6 +36,20 @@ public sealed class ErrorFormatTests(SonglyApiFactory factory)
         await AssertError(response, HttpStatusCode.Unauthorized, "UNAUTHENTICATED", "Wymagane uwierzytelnienie");
     }
 
+    /// <summary>
+    /// A write rejected by a database constraint is a conflict with the current data, not a server
+    /// failure — usually a race, like two clicks on the same link.
+    /// </summary>
+    [Theory]
+    [InlineData("/probe/conflict/unique")]
+    [InlineData("/probe/conflict/vanished")]
+    public async Task A_write_rejected_by_the_database_is_409_conflict(string probe)
+    {
+        var response = await _client.PostJsonAsync(probe, new { });
+
+        await AssertError(response, HttpStatusCode.Conflict, "CONFLICT", "Żądanie koliduje z bieżącym stanem danych — odśwież i spróbuj ponownie");
+    }
+
     [Fact]
     public async Task Invalid_fields_are_400_validation_error_with_every_field_named()
     {

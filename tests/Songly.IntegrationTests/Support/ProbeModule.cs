@@ -31,6 +31,22 @@ internal sealed class ProbeModule : IModule
         probe.MapGet("/query", (string name) => Results.Ok(name));
         probe.MapGet("/items/{id}", (Guid id) => Results.Ok(id));
         probe.MapPost("/validated", (ValidatedProbeRequest request) => Results.Ok(request));
+
+        // A unique constraint tripped by a second insert, and a delete of a row that is already gone:
+        // the two shapes of "the data changed under this request".
+        probe.MapPost("/conflict/unique", async (ProbeDbContext db) =>
+        {
+            var email = $"probe-{Guid.NewGuid():N}@songly.io";
+            db.Users.Add(new ProbeUser { Email = email });
+            await db.SaveChangesAsync();
+            db.Users.Add(new ProbeUser { Email = email });
+            await db.SaveChangesAsync();
+        });
+        probe.MapPost("/conflict/vanished", async (ProbeDbContext db) =>
+        {
+            db.Users.Remove(new ProbeUser());
+            await db.SaveChangesAsync();
+        });
         probe.MapGet("/json-shape", () => new ProbeShape(
             new DateTimeOffset(2026, 11, 2, 13, 30, 15, 123, TimeSpan.FromHours(1)),
             ProbeStatus.ModeratorGranted));

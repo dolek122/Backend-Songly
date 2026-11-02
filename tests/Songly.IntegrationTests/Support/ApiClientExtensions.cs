@@ -28,6 +28,22 @@ public static class ApiClientExtensions
         return (await response.Content.ReadFromJsonAsync<Tokens>(TestContext.Current.CancellationToken))!;
     }
 
+    public static Task<HttpResponseMessage> RegisterAsync(this HttpClient client, string email, string password = TestAccounts.DefaultPassword) =>
+        client.PostJsonAsync("/api/v1/auth/register", new { email, password });
+
+    public static Task<HttpResponseMessage> VerifyAsync(this HttpClient client, string token) =>
+        client.PostJsonAsync("/api/v1/auth/register/verify", new { token });
+
+    /// <summary>
+    /// Registers and confirms the address the way a user does: the token is read from the link in
+    /// the e-mail the application sent.
+    /// </summary>
+    public static async Task<Tokens> RegisterAndVerifyAsync(this HttpClient client, RecordingMailSender mails, string email, string password = TestAccounts.DefaultPassword)
+    {
+        Assert.Equal(HttpStatusCode.Accepted, (await client.RegisterAsync(email, password)).StatusCode);
+        return await (await client.VerifyAsync(mails.TokenSentTo(email))).ReadTokensAsync();
+    }
+
     public static Task<HttpResponseMessage> RefreshAsync(this HttpClient client, string refreshToken) =>
         client.PostJsonAsync("/api/v1/auth/refresh", new { refreshToken });
 

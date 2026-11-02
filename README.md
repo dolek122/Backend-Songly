@@ -16,9 +16,9 @@ does; this repository documents *how* it is done in .NET ([ADR 0001](docs/adr/00
 
 | Module | Responsibility | Status |
 |---|---|---|
-| Common | Error format, request correlation, JSON conventions | ✅ |
+| Common | Error format, request correlation, JSON conventions, validation, e-mail channel, Redis interval gates | ✅ |
 | Migrations | Schema (33 original migrations) | ✅ |
-| Identity | Login, JWT + rotated refresh tokens with theft detection, password change, live roles, suspension and admin enforcement | 🚧 in progress — registration, password reset, account deletion, suspensions and admin next |
+| Identity | Registration with e-mail verification, login, JWT + rotated refresh tokens with theft detection, password change, live roles, suspension and admin enforcement | 🚧 in progress — password reset, account deletion, suspensions and admin next |
 | Profile | Public profiles, favourite genres | — |
 | Social | Friends, friend requests, blocking | — |
 | Content | Posts, likes, comments, shares, feed | — |
@@ -75,14 +75,20 @@ role takes effect immediately; the whole admin area is guarded by path. A stolen
 is detected the moment either copy is reused, and every session of the account is revoked
 ([ADR 0004](docs/adr/0004-authentication-and-authorization.md)).
 
+**No oracle for who has an account.** Registering a free address and a taken one returns the
+same response in the same time; the only difference is the e-mail the mailbox owner receives (a
+confirmation link or a warning). The account does not exist until the address is confirmed. Mail
+goes out from a background queue, so the response never waits for the mail server
+([ADR 0005](docs/adr/0005-mail-redis-and-side-effects.md)).
+
 **Every request is correlated.** It gets an id (or keeps a sanitised one from the client), returned
 in `X-Request-Id` and attached to every log line, so a user's bug report leads to exactly their
 request.
 
 ## Tech stack
 
-.NET 10 · ASP.NET Core Minimal APIs · EF Core · PostgreSQL 16 · DbUp · JWT bearer auth · bcrypt ·
-Serilog (JSON logs) ·
+.NET 10 · ASP.NET Core Minimal APIs · EF Core · PostgreSQL 16 · Redis · DbUp · JWT bearer auth · bcrypt ·
+MailKit · Serilog (JSON logs) ·
 OpenAPI + Scalar · xUnit v3 · Testcontainers · ArchUnitNET · Docker · GitHub Actions
 
 ## Running locally
@@ -90,7 +96,7 @@ OpenAPI + Scalar · xUnit v3 · Testcontainers · ArchUnitNET · Docker · GitHu
 Requirements: [.NET 10 SDK](https://dotnet.microsoft.com/download) and Docker.
 
 ```bash
-docker compose up -d postgres
+docker compose up -d postgres redis
 ```
 
 ```bash
@@ -115,7 +121,8 @@ docker compose --profile app up --build
 dotnet test
 ```
 
-Integration tests start PostgreSQL in a container, so Docker must be running. They run against the
+Integration tests start PostgreSQL, Redis and (for the SMTP test) a test mail server in
+containers, so Docker must be running. They run against the
 real database on purpose — an in-memory substitute would lie about how Postgres behaves.
 
 CI (GitHub Actions) checks formatting (`dotnet format`), builds with warnings as errors, runs all

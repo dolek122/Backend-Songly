@@ -32,6 +32,7 @@ internal sealed partial class RequestIdMiddleware(RequestDelegate next, ILogger<
     {
         var requestId = Resolve(context.Request.Headers[HeaderName].ToString());
         context.TraceIdentifier = requestId;
+        RequestCorrelation.Current = requestId;
         context.Response.OnStarting(() =>
         {
             context.Response.Headers[HeaderName] = requestId;
