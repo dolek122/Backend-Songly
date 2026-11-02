@@ -33,7 +33,8 @@ internal static class AuthenticationSetup
             // Every endpoint requires a full, non-suspended account unless it explicitly says
             // otherwise (AllowAnonymous or a named policy). A new endpoint is closed by default,
             // also to suspended accounts — it cannot be forgotten the way a check could.
-            .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireRole(Roles.User).Build());
+            .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireRole(Roles.User).Build())
+            .AddPolicy(Policies.UserOrSuspended, policy => policy.RequireRole(Roles.User, Roles.Suspended));
 
         return services;
     }

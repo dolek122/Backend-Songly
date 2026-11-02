@@ -18,7 +18,7 @@ does; this repository documents *how* it is done in .NET ([ADR 0001](docs/adr/00
 |---|---|---|
 | Common | Error format, request correlation, JSON conventions, validation, e-mail channel, Redis interval gates | ✅ |
 | Migrations | Schema (33 original migrations) | ✅ |
-| Identity | Registration with e-mail verification, login, JWT + rotated refresh tokens with theft detection, password change and reset, live roles, suspension and admin enforcement | 🚧 in progress — account deletion, suspensions and admin next |
+| Identity | Registration with e-mail verification, login, JWT + rotated refresh tokens with theft detection, password change and reset, live roles, suspensions with appeals, admin role management | 🚧 in progress — account deletion next |
 | Profile | Public profiles, favourite genres | — |
 | Social | Friends, friend requests, blocking | — |
 | Content | Posts, likes, comments, shares, feed | — |

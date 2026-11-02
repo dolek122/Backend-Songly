@@ -4,8 +4,10 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
 using Songly.Common.Web;
+using Songly.Identity.Administration;
 using Songly.Identity.PasswordReset;
 using Songly.Identity.Registration;
+using Songly.Identity.Security;
 using Songly.Identity.Sessions;
 
 namespace Songly.Identity.Http;
@@ -62,6 +64,19 @@ internal static class AuthEndpoints
                 return TypedResults.NoContent();
             })
             .AllowAnonymous();
+
+        // Two of the few endpoints open to a suspended account: without them it could not learn
+        // why, or contest the decision. An active account gets suspended=false, not a 404.
+        auth.MapGet("/me/suspension", (ClaimsPrincipal user, AccountSuspensionService service, CancellationToken cancellationToken)
+                => service.OwnSuspensionAsync(user.GetUserId(), cancellationToken))
+            .RequireAuthorization(Policies.UserOrSuspended);
+
+        auth.MapPost("/me/suspension/appeal", async Task<NoContent> (SuspensionAppealRequest request, ClaimsPrincipal user, AccountSuspensionService service, CancellationToken cancellationToken) =>
+            {
+                await service.AppealAsync(user.GetUserId(), request, cancellationToken);
+                return TypedResults.NoContent();
+            })
+            .RequireAuthorization(Policies.UserOrSuspended);
 
         // No token pair in the response, on purpose: the change revokes every session, and a fresh
         // pair here would quietly undo half of that for this device.

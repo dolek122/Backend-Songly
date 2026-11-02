@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Songly.Common.Modules;
 using Songly.Common.Persistence;
+using Songly.Identity.Administration;
 using Songly.Identity.Http;
 using Songly.Identity.PasswordReset;
 using Songly.Identity.Persistence;
@@ -36,9 +37,17 @@ public sealed class IdentityModule : IModule
         services.AddOptions<PasswordResetOptions>().Bind(configuration.GetSection(PasswordResetOptions.Section));
         services.AddScoped<PasswordResetMailer>();
         services.AddScoped<PasswordResetService>();
+
+        services.AddSingleton<AdministrationMetrics>();
+        services.AddScoped<AccountSuspensionService>();
+        services.AddScoped<AdminRoleService>();
     }
 
     public void UsePipeline(IApplicationBuilder app) => app.UseSonglyAuthentication();
 
-    public void MapEndpoints(IEndpointRouteBuilder endpoints) => endpoints.MapAuthEndpoints();
+    public void MapEndpoints(IEndpointRouteBuilder endpoints)
+    {
+        endpoints.MapAuthEndpoints();
+        endpoints.MapAdminEndpoints();
+    }
 }
