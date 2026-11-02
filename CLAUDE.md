@@ -56,6 +56,9 @@ The repo uses Microsoft.Testing.Platform (`global.json`). Filter with
   escapes an endpoint is a logged 500. Never return ad-hoc error bodies or ProblemDetails.
 - JSON: camelCase, instants as UTC with `Z` (`DateTimeOffset`), enums as `UPPER_SNAKE_CASE`
   strings — configured once in `AddSonglyWeb`.
+- Enums are stored as their `UPPER_SNAKE_CASE` names (`EnumNameConverter<T>`), as the original
+  wrote them. An enum that appears in a response gets its own copy in `Http` with an explicit
+  mapping — endpoints never see `Domain` types, enums included.
 - Time comes from the injected `TimeProvider`, never `DateTime.UtcNow`, so tests can control it.
 - Logs: never log e-mail addresses, request bodies, passwords or tokens. Identify users by id.
 - Migrations: never edit an applied script (DbUp keeps no checksums, ADR 0003). New changes are

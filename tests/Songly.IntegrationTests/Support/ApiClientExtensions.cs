@@ -18,6 +18,9 @@ public static class ApiClientExtensions
     public static Task<HttpResponseMessage> PutJsonAsync(this HttpClient client, string path, object body, string? accessToken = null) =>
         client.SendAsync(Request(HttpMethod.Put, path, accessToken, body), TestContext.Current.CancellationToken);
 
+    public static Task<HttpResponseMessage> DeleteAsync(this HttpClient client, string path, string? accessToken) =>
+        client.SendAsync(Request(HttpMethod.Delete, path, accessToken, body: null), TestContext.Current.CancellationToken);
+
     public static Task<HttpResponseMessage> TryLoginAsync(this HttpClient client, string email, string password) =>
         client.PostJsonAsync("/api/v1/auth/login", new { email, password });
 

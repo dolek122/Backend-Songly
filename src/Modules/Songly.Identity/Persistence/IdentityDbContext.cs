@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Songly.Common.Persistence;
 using Songly.Identity.Domain;
 
 namespace Songly.Identity.Persistence;
@@ -24,6 +25,7 @@ internal sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> opti
         {
             user.ToTable("users");
             user.HasKey(u => u.Id);
+            user.Property(u => u.SuspensionAppealStatus).HasConversion(new EnumNameConverter<SuspensionAppealStatus>());
         });
 
         modelBuilder.Entity<Session>(session =>
