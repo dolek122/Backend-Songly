@@ -1,2 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <!-- Contracts only: identity for account deletion, profile for names and avatars. -->
+    <ProjectReference Include="..\Songly.Identity\Songly.Identity.csproj" />
+    <ProjectReference Include="..\Songly.Profile\Songly.Profile.csproj" />
+  </ItemGroup>
+
 </Project>
