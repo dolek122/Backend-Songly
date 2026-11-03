@@ -39,13 +39,28 @@ public sealed class TemporaryDatabase : IAsyncDisposable
     {
         await using var connection = new NpgsqlConnection(ConnectionString);
         await connection.OpenAsync(TestContext.Current.CancellationToken);
-        await using var command = new NpgsqlCommand(sql, connection);
+        await using var command = Command(connection, sql, parameters);
+        return (T)(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken))!;
+    }
+
+    /// <summary>Changes data behind the application's back, like <see cref="SonglyApiFactory.ExecuteSqlAsync"/>.</summary>
+    public async Task ExecuteSqlAsync(string sql, params (string Name, object? Value)[] parameters)
+    {
+        await using var connection = new NpgsqlConnection(ConnectionString);
+        await connection.OpenAsync(TestContext.Current.CancellationToken);
+        await using var command = Command(connection, sql, parameters);
+        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+    }
+
+    private static NpgsqlCommand Command(NpgsqlConnection connection, string sql, (string Name, object? Value)[] parameters)
+    {
+        var command = new NpgsqlCommand(sql, connection);
         foreach (var (name, value) in parameters)
         {
             command.Parameters.AddWithValue(name, value ?? DBNull.Value);
         }
 
-        return (T)(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken))!;
+        return command;
     }
 
     public async ValueTask DisposeAsync()

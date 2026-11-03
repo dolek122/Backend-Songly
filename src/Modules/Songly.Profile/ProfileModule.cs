@@ -5,6 +5,7 @@ using Songly.Common.Events;
 using Songly.Common.Modules;
 using Songly.Common.Persistence;
 using Songly.Identity.Contracts;
+using Songly.Profile.Contracts;
 using Songly.Profile.Http;
 using Songly.Profile.Persistence;
 using Songly.Profile.Profiles;
@@ -18,6 +19,9 @@ public sealed class ProfileModule : IModule
     {
         services.AddModuleDbContext<ProfileDbContext>();
         services.AddSingleton<AvatarFiles>();
+        services.AddOptions<GenrePopularityOptions>().Bind(configuration.GetSection(GenrePopularityOptions.Section));
+        services.AddSingleton<GenrePopularityCache>();
+        services.AddScoped<IProfileDirectory, ProfileDirectory>();
         services.AddScoped<ProfileService>();
         services.AddScoped<UserSearch>();
         services.AddScoped<ProfileSummaries>();

@@ -37,6 +37,8 @@ public sealed class SonglyApiFactory : WebApplicationFactory<Program>, IAsyncLif
 
     public string ConnectionString => _postgres.GetConnectionString();
 
+    public string RedisConnectionString => _redis.GetConnectionString();
+
     /// <summary>Where uploaded files are served from — fetched by tests anonymously, as clients do.</summary>
     public string StoragePublicBaseUrl => $"{StorageEndpoint}/{StorageBucket}";
 

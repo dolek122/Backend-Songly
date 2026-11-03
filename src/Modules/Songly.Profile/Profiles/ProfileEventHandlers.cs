@@ -23,9 +23,10 @@ internal sealed class CreateProfileOnRegistration(ProfileService profiles) : IDo
 /// is not cosmetic (original Claude.md §9): if the deletion rolled back after the file was gone,
 /// the profile would point to a file that no longer exists — an avatar that never loads and cannot
 /// be recovered. The key is read before the row goes; afterwards there is nowhere to read it from.
+/// The genre popularity snapshot is evicted after the commit for the same reason.
 /// </para>
 /// </remarks>
-internal sealed class DeleteProfileOnAccountDeletion(ProfileDbContext db, AvatarFiles avatars, IAfterCommit afterCommit)
+internal sealed class DeleteProfileOnAccountDeletion(ProfileDbContext db, AvatarFiles avatars, GenrePopularityCache popularity, IAfterCommit afterCommit)
     : IDomainEventHandler<UserAccountDeletionRequested>
 {
     public async Task HandleAsync(UserAccountDeletionRequested domainEvent, CancellationToken cancellationToken)
@@ -42,5 +43,9 @@ internal sealed class DeleteProfileOnAccountDeletion(ProfileDbContext db, Avatar
         {
             afterCommit.Defer(token => avatars.DeleteOrphanedAsync(avatarKey, token));
         }
+
+        // The account takes its genres with it, so popularity changes too — the second and last
+        // path that touches user_genres (original ADR 0032). After the commit, like every eviction.
+        afterCommit.Defer(_ => popularity.EvictAsync());
     }
 }

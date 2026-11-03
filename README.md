@@ -19,7 +19,7 @@ does; this repository documents *how* it is done in .NET ([ADR 0001](docs/adr/00
 | Common | Error format, request correlation, JSON conventions, validation, paging, e-mail channel, Redis interval gates, domain events, cross-module transactions with work after the commit, object storage, image metadata removal | ✅ |
 | Migrations | Schema (33 original migrations) | ✅ |
 | Identity | Registration with e-mail verification, login, JWT + rotated refresh tokens with theft detection, password change and reset, live roles, suspensions with appeals, admin roles, account deletion (API and web page), session cleanup, local test accounts | ✅ |
-| Profile | Profiles created with the account, favourite genres, user search, public profiles hidden for suspended accounts, names for the administration, avatars stripped of metadata | 🚧 genre popularity next |
+| Profile | Profiles created with the account, favourite genres, user search, public profiles hidden for suspended accounts, names for the administration, avatars stripped of metadata, genre popularity cached in Redis, the directory other modules read names and genres from | ✅ |
 | Social | Friends, friend requests, blocking | — |
 | Content | Posts, likes, comments, shares, feed | — |
 | NowPlaying | Spotify integration, live status | — |
