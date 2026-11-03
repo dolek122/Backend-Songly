@@ -32,12 +32,20 @@ public sealed class BanAppealTests(SonglyApiFactory factory)
         Assert.Equal("PENDING", (await _communities.StatusAsync(troll, communityId)).GetProperty("ban").GetProperty("appealStatus").GetString());
     }
 
-    /// <summary>One appeal per ban: the structural anti-spam of a channel from the punished to the punisher.</summary>
+    /// <summary>
+    /// One appeal per ban, whatever became of it: the structural anti-spam of a channel from the
+    /// punished to the punisher. A rejection closes the case — appealing again after it would turn
+    /// the channel into a way of writing to the moderators as often as one likes.
+    /// </summary>
     [Fact]
-    public async Task A_second_appeal_is_a_conflict()
+    public async Task A_second_appeal_is_a_conflict_even_after_a_rejection()
     {
-        var (_, troll, communityId) = await Banned("appeal-second");
+        var (owner, troll, communityId) = await Banned("appeal-second");
         await _communities.AppealAsync(troll, communityId);
+
+        await (await _communities.AppealAsync(troll, communityId)).ReadErrorAsync(HttpStatusCode.Conflict, "BAN_APPEAL_ALREADY_SUBMITTED");
+
+        await _communities.RejectAppealAsync(owner, communityId, troll.Id);
 
         await (await _communities.AppealAsync(troll, communityId)).ReadErrorAsync(HttpStatusCode.Conflict, "BAN_APPEAL_ALREADY_SUBMITTED");
     }
