@@ -16,10 +16,10 @@ does; this repository documents *how* it is done in .NET ([ADR 0001](docs/adr/00
 
 | Module | Responsibility | Status |
 |---|---|---|
-| Common | Error format, request correlation, JSON conventions, validation, e-mail channel, Redis interval gates, domain events, cross-module transactions | ✅ |
+| Common | Error format, request correlation, JSON conventions, validation, paging, e-mail channel, Redis interval gates, domain events, cross-module transactions | ✅ |
 | Migrations | Schema (33 original migrations) | ✅ |
 | Identity | Registration with e-mail verification, login, JWT + rotated refresh tokens with theft detection, password change and reset, live roles, suspensions with appeals, admin roles, account deletion (API and web page), session cleanup, local test accounts | ✅ |
-| Profile | Public profiles, favourite genres | — |
+| Profile | Profiles created with the account, favourite genres, user search, public profiles hidden for suspended accounts, names for the administration | 🚧 avatars and genre popularity next |
 | Social | Friends, friend requests, blocking | — |
 | Content | Posts, likes, comments, shares, feed | — |
 | NowPlaying | Spotify integration, live status | — |
@@ -47,7 +47,8 @@ tests/
 ├── Songly.ArchitectureTests/   module boundary rules (ArchUnitNET)
 ├── Songly.IntegrationTests/    the whole app against real Postgres and Redis (Testcontainers)
 ├── Songly.Common.Tests/        unit tests of Common's internals
-└── Songly.Identity.Tests/      unit tests of one module's internals
+├── Songly.Identity.Tests/      unit tests of one module's internals
+└── Songly.Profile.Tests/
 ```
 
 **Each module is its own assembly, and everything in it is `internal`** except its entry point
@@ -77,9 +78,12 @@ role takes effect immediately; the whole admin area is guarded by path. A stolen
 is detected the moment either copy is reused, and every session of the account is revoked
 ([ADR 0004](docs/adr/0004-authentication-and-authorization.md)).
 
-**Deleting an account is one transaction across modules.** Every module deletes its own data in
-reaction to a domain event, inside the same database transaction and before the account row goes;
-if any module fails, nothing is deleted ([ADR 0006](docs/adr/0006-domain-events-and-cross-module-transaction.md)).
+**Creating and deleting an account are each one transaction across modules.** Every module
+deletes its own data in reaction to a domain event, inside the same database transaction and before
+the account row goes; if any module fails, nothing is deleted
+([ADR 0006](docs/adr/0006-domain-events-and-cross-module-transaction.md)). The same holds for a new
+account: its profile is created in the transaction that creates it, so there is never an account
+without a profile ([ADR 0008](docs/adr/0008-new-account-event-in-the-accounts-transaction.md)).
 
 **No oracle for who has an account.** Registering a free address and a taken one returns the
 same response in the same time; the only difference is the e-mail the mailbox owner receives (a

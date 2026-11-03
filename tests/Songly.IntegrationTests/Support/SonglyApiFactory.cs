@@ -97,6 +97,7 @@ public sealed class SonglyApiFactory : WebApplicationFactory<Program>, IAsyncLif
             services.AddSingleton<IModule, ProbeModule>();
             services.AddModuleDbContext<ProbeDbContext>();
             services.AddScoped<IDomainEventHandler<UserAccountDeletionRequested>, ProbeDeletionHandler>();
+            services.AddScoped<IDomainEventHandler<UserRegistered>, ProbeRegistrationHandler>();
             RecordingMailSender.Install(services);
         });
     }

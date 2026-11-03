@@ -48,7 +48,8 @@ The repo uses Microsoft.Testing.Platform (`global.json`). Filter with
 - Each module has its own `DbContext` (`AddModuleDbContext<T>`), mapping only its own tables.
 - Modules react to each other through domain events (`IDomainEvents`, `IDomainEventHandler<T>`,
   ADR 0006). Publish inside a `ModuleTransaction` for "all or nothing" (handlers share the
-  transaction), after the save for reactions to a committed fact.
+  transaction), after the save for reactions to a committed fact. `UserRegistered` is published
+  inside the account's transaction (ADR 0008); its handlers must not send anything outside.
 - **A module with per-user data handles `UserAccountDeletionRequested`** and deletes that data —
   otherwise account deletion fails on a foreign key. Keep the "what we delete" list on the
   `/account-deletion` page (`AccountDeletionPages`) in step with those handlers.
@@ -80,6 +81,10 @@ The repo uses Microsoft.Testing.Platform (`global.json`). Filter with
 - Side effects (e-mail, later push) go **after** the save that makes them true — the order of
   statements is the "after commit" (ADR 0005). Send mail through `IMailSender`; a delivery
   failure must never change the HTTP response.
+- Lists are paged with `PageQuery` (Spring's bounds: nothing rejected, size 20 by default, at
+  most 100) and return `PagedResponse<T>` via `ToPageAsync` on an **ordered** query with the
+  filters inside it (ADR 0009). A required set of ids from the query string goes through
+  `RequiredGuidSet` (`?ids=a&ids=b` and `?ids=a,b` alike — the mobile app sends the latter).
 - "At most once per interval" goes through `IIntervalGate` (Redis, fail-open). Never make a
   request depend on Redis being up.
 - Periodic work is a `BackgroundService` with a `PeriodicTimer` on `TimeProvider`, a DI scope per
@@ -96,9 +101,11 @@ The repo uses Microsoft.Testing.Platform (`global.json`). Filter with
   in-memory substitute. `SonglyApiFactory` is shared by the test assembly.
 - Pure logic with no HTTP, database or other module involved (formatting, calculations) gets unit
   tests in `tests/Songly.<Module>.Tests` — the only assembly the module's internals are visible to.
-- Create accounts with `factory.CreateUserAsync()` and log in with `client.LoginAsync(user)`;
-  use `factory.ExecuteSqlAsync` only for state the API cannot produce yet or whose age is the
-  subject of the test. Every test makes its own accounts — the database is shared.
+- Create accounts with `factory.CreateUserAsync()` and log in with `client.LoginAsync(user)`.
+  It registers through the API (ADR 0008), so the account has a profile, a session and a display
+  name equal to the part of its address before the "@"; the verification e-mail is forgotten by
+  the recorder. Use `factory.ExecuteSqlAsync` only for state the API cannot produce yet or whose
+  age is the subject of the test. Every test makes its own accounts — the database is shared.
 - Read tokens from the e-mail the app sent (`factory.Mails.TokenSentTo(email)`), never from the
   database. A test needing other settings runs against `factory.WithSettings(...)` — a second
   app instance on the same database and Redis. Background jobs are off in the shared instance.

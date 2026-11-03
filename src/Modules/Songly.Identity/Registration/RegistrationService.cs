@@ -1,7 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Songly.Common.Events;
+using Songly.Common.Persistence;
 using Songly.Common.Throttling;
+using Songly.Identity.Contracts;
 using Songly.Identity.Domain;
 using Songly.Identity.Http;
 using Songly.Identity.Persistence;
@@ -39,6 +42,7 @@ internal sealed partial class RegistrationService(
     TokenIssuer tokens,
     RegistrationMailer mailer,
     IIntervalGate gate,
+    IDomainEvents events,
     IOptions<RegistrationOptions> options,
     IdentityMetrics metrics,
     TimeProvider time,
@@ -122,7 +126,9 @@ internal sealed partial class RegistrationService(
             throw InvalidToken();
         }
 
-        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        // One transaction across modules (ADR 0006): the account, the profile other modules create
+        // for it, and the session exist together or not at all.
+        using var transaction = ModuleTransaction.Begin();
 
         // A race: someone may have confirmed the same address through another registration in the
         // meantime. Clean up and refuse exactly as for a bad token — a distinct message would tell
@@ -131,7 +137,7 @@ internal sealed partial class RegistrationService(
         {
             db.PendingRegistrations.Remove(pending);
             await db.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
+            transaction.Complete();
             throw InvalidToken();
         }
 
@@ -139,11 +145,12 @@ internal sealed partial class RegistrationService(
         db.Users.Add(user);
         db.PendingRegistrations.Remove(pending);
 
-        // Saved before the session is opened: the session row references the user, and EF Core
-        // does not know that (no navigation is mapped), so it would not order the two inserts.
+        // Saved before the handlers and the session: their rows reference the user, and EF Core
+        // does not know that (no navigation is mapped), so it would not order the inserts.
         await db.SaveChangesAsync(cancellationToken);
+        await events.PublishAsync(new UserRegistered(user.Id, now), cancellationToken);
         var response = await tokens.IssueForAsync(user.Id, cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
+        transaction.Complete();
 
         metrics.Registration("verified");
         LogVerified(user.Id);
