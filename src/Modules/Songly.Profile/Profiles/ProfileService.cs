@@ -9,7 +9,7 @@ using Songly.Profile.Persistence;
 namespace Songly.Profile.Profiles;
 
 /// <summary>The caller's own profile, other users' public profiles, and favourite genres.</summary>
-internal sealed class ProfileService(ProfileDbContext db, ISuspendedAccounts suspendedAccounts, AvatarFiles avatars, TimeProvider time)
+internal sealed class ProfileService(ProfileDbContext db, ISuspendedAccounts suspendedAccounts, AvatarFiles avatars, GenrePopularityCache popularity, TimeProvider time)
 {
     /// <summary>
     /// The default profile of a new account, created inside the transaction that creates the
@@ -84,6 +84,11 @@ internal sealed class ProfileService(ProfileDbContext db, ISuspendedAccounts sus
         db.UserGenres.AddRange(genreIds.Select(genreId => new UserGenre(userId, genreId, now)));
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+
+        // Popularity has just changed, so the cached snapshot goes — after the commit (see
+        // GenrePopularityCache.EvictAsync). Also when the set is the same as before: comparing
+        // would cost a query and save nothing.
+        await popularity.EvictAsync();
     }
 
     public async Task<IReadOnlyList<GenreResponse>> FavoriteGenresAsync(Guid userId, CancellationToken cancellationToken) =>

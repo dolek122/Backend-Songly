@@ -116,7 +116,11 @@ The repo uses Microsoft.Testing.Platform (`global.json`). Filter with
   database. A test needing other settings runs against `factory.WithSettings(...)` — a second
   app instance on the same database and Redis. Background jobs are off in the shared instance.
 - Data that must not reach the shared database (fixed e-mail addresses, an extra administrator)
-  goes to a `TemporaryDatabase` of its own: `factory.WithSettings(database.Settings)`.
+  goes to a `TemporaryDatabase` of its own: `factory.WithSettings(database.Settings)`. The same for
+  state that is global to the installation (the genre popularity snapshot): a temporary database
+  plus a Redis database of its own (`,defaultDatabase=N`), or parallel tests evict it mid-test.
+- Another module's contract is tested the way that module will use it: resolve it from a scope of
+  `factory.Services` (e.g. `IProfileDirectory`).
 - Uploaded files are checked in the real MinIO by fetching `factory.StoragePublicBaseUrl/...`
   anonymously, as clients do. Test images come from `tests/Shared/TestImages.cs` (no image library:
   compare results byte for byte).
