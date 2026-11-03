@@ -20,7 +20,7 @@ does; this repository documents *how* it is done in .NET ([ADR 0001](docs/adr/00
 | Migrations | Schema (33 original migrations) | ✅ |
 | Identity | Registration with e-mail verification, login, JWT + rotated refresh tokens with theft detection, password change and reset, live roles, suspensions with appeals, admin roles, account deletion (API and web page), session cleanup, local test accounts | ✅ |
 | Profile | Profiles created with the account, favourite genres, user search, public profiles hidden for suspended accounts, names for the administration, avatars stripped of metadata, genre popularity cached in Redis, the directory other modules read names and genres from | ✅ |
-| Social | Friends, friend requests, blocking | — |
+| Social | Friend requests (mutual ones become a friendship), friends, blocking that ends the relation, block state for the profile screen, the graph other modules read friends and blocks from | ✅ |
 | Content | Posts, likes, comments, shares, feed | — |
 | NowPlaying | Spotify integration, live status | — |
 | Matching | Genre-based matching | — |
@@ -48,7 +48,8 @@ tests/
 ├── Songly.IntegrationTests/    the whole app against real Postgres and Redis (Testcontainers)
 ├── Songly.Common.Tests/        unit tests of Common's internals
 ├── Songly.Identity.Tests/      unit tests of one module's internals
-└── Songly.Profile.Tests/
+├── Songly.Profile.Tests/
+└── Songly.Social.Tests/
 ```
 
 **Each module is its own assembly, and everything in it is `internal`** except its entry point

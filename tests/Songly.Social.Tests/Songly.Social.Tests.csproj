@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Unit tests of the social module's internals (ADR 0002). -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Modules\Songly.Social\Songly.Social.csproj" />
+  </ItemGroup>
+
+</Project>
