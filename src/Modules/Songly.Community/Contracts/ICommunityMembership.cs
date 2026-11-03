@@ -20,6 +20,12 @@ public interface ICommunityMembership
     /// </summary>
     Task<bool> CanModerateAsync(Guid communityId, Guid userId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// An active ban. Content asks before accepting a post: membership alone is not enough, because a
+    /// ban removes the membership and joining again is one request.
+    /// </summary>
+    Task<bool> IsBannedAsync(Guid communityId, Guid userId, CancellationToken cancellationToken);
+
     /// <summary>Who moderates the community — the owner and the moderators. For notifying them about a report.</summary>
     Task<IReadOnlySet<Guid>> ModeratorIdsAsync(Guid communityId, CancellationToken cancellationToken);
 }

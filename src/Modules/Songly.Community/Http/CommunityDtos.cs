@@ -66,5 +66,4 @@ internal sealed record CommunityMemberResponse(Guid UserId, string? DisplayName,
 /// The caller's own standing in a community (original ADR 0015). Each field means something only for
 /// its status: <c>role</c> and <c>joinedAt</c> for <c>MEMBER</c>, <c>ban</c> for <c>BANNED</c>.
 /// </summary>
-/// <param name="Ban">Always <c>null</c> until bans arrive (the next part); the field is in the contract already.</param>
-internal sealed record MembershipStatusResponse(CommunityMembershipStatus Status, CommunityRoleDto? Role, DateTimeOffset? JoinedAt, object? Ban);
+internal sealed record MembershipStatusResponse(CommunityMembershipStatus Status, CommunityRoleDto? Role, DateTimeOffset? JoinedAt, BanDetailsResponse? Ban);

@@ -19,6 +19,7 @@ public sealed class CommunityModule : IModule
     {
         services.AddModuleDbContext<CommunityDbContext>();
         services.AddScoped<CommunityService>();
+        services.AddScoped<BanService>();
         services.AddScoped<ICommunityMembership>(provider => provider.GetRequiredService<CommunityService>());
         services.AddScoped<ICommunityDirectory>(provider => provider.GetRequiredService<CommunityService>());
         services.AddScoped<IDomainEventHandler<UserAccountDeletionRequested>, DeleteCommunityDataOnAccountDeletion>();

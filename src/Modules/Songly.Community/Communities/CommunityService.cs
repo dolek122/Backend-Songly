@@ -88,6 +88,14 @@ internal sealed class CommunityService(CommunityDbContext db, IProfileDirectory 
     public async Task JoinAsync(Guid communityId, Guid userId, CancellationToken cancellationToken)
     {
         await RequireAsync(communityId, cancellationToken);
+
+        // Without this a ban would only be a removal from the list: joining is open and immediate, so
+        // the banned user would come back in one request, and moderation would be a race of clicks.
+        if (await IsBannedAsync(communityId, userId, cancellationToken))
+        {
+            throw new BannedFromCommunityException();
+        }
+
         if (!await IsMemberAsync(communityId, userId, cancellationToken))
         {
             db.Members.Add(new CommunityMember(communityId, userId, CommunityRole.Member, time.GetUtcNow()));
@@ -157,14 +165,42 @@ internal sealed class CommunityService(CommunityDbContext db, IProfileDirectory 
         await db.SaveChangesAsync(cancellationToken);
     }
 
-    /// <summary>The caller's own standing (original ADR 0015).</summary>
+    /// <summary>
+    /// The caller's own standing — including the details of their <b>own</b> ban (original ADR 0015),
+    /// the only place the banned user sees its reason and term. The e-mail deliberately does not carry
+    /// the reason: mail goes past blocks and is pushed, so a reason in the e-mail would turn a cycle of
+    /// ban and unban into delivering any text a moderator writes into someone's inbox. Here one has to
+    /// come for it.
+    /// </summary>
+    /// <remarks>
+    /// The membership is checked before the ban: after an expired ban and a return, both rows exist
+    /// (the expired ban stays), and the status describes the membership. An expired ban reads as
+    /// <c>NONE</c>.
+    /// </remarks>
     public async Task<MembershipStatusResponse> MembershipStatusAsync(Guid communityId, Guid userId, CancellationToken cancellationToken)
     {
         await RequireAsync(communityId, cancellationToken);
         var membership = await db.Members.AsNoTracking().SingleOrDefaultAsync(m => m.CommunityId == communityId && m.UserId == userId, cancellationToken);
-        return membership is null
-            ? new MembershipStatusResponse(CommunityMembershipStatus.None, null, null, null)
-            : new MembershipStatusResponse(CommunityMembershipStatus.Member, ToDto(membership.Role), membership.JoinedAt, null);
+        if (membership is not null)
+        {
+            return new MembershipStatusResponse(CommunityMembershipStatus.Member, ToDto(membership.Role), membership.JoinedAt, null);
+        }
+
+        var ban = await db.Bans.AsNoTracking().SingleOrDefaultAsync(b => b.CommunityId == communityId && b.UserId == userId, cancellationToken);
+        return ban is not null && ban.IsActiveAt(time.GetUtcNow())
+            ? new MembershipStatusResponse(
+                CommunityMembershipStatus.Banned,
+                null,
+                null,
+                new BanDetailsResponse(ban.Reason, ban.CreatedAt, ban.ExpiresAt, BanMapping.ToDto(ban.AppealStatus), ban.AppealedAt))
+            : new MembershipStatusResponse(CommunityMembershipStatus.None, null, null, null);
+    }
+
+    /// <summary>An active ban — an expired one counts nowhere (original ADR 0014).</summary>
+    public Task<bool> IsBannedAsync(Guid communityId, Guid userId, CancellationToken cancellationToken)
+    {
+        var now = time.GetUtcNow();
+        return db.Bans.AnyAsync(b => b.CommunityId == communityId && b.UserId == userId && (b.ExpiresAt == null || b.ExpiresAt > now), cancellationToken);
     }
 
     public Task<bool> ExistsAsync(Guid communityId, CancellationToken cancellationToken) =>
@@ -198,7 +234,7 @@ internal sealed class CommunityService(CommunityDbContext db, IProfileDirectory 
         }
     }
 
-    private async Task<CommunityEntity> RequireAsync(Guid communityId, CancellationToken cancellationToken) =>
+    public async Task<CommunityEntity> RequireAsync(Guid communityId, CancellationToken cancellationToken) =>
         await db.Communities.SingleOrDefaultAsync(c => c.Id == communityId, cancellationToken) ?? throw new CommunityNotFoundException();
 
     private async Task<CommunityEntity> RequireOwnedAsync(Guid communityId, Guid requesterId, CancellationToken cancellationToken)
