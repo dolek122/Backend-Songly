@@ -76,13 +76,14 @@ internal sealed partial class LocalDevAccountsSeeder(
             user.GrantAdmin();
         }
 
-        using (var transaction = ModuleTransaction.Begin())
-        {
-            db.Users.Add(user);
-            await db.SaveChangesAsync(cancellationToken);
-            await scope.ServiceProvider.GetRequiredService<IDomainEvents>().PublishAsync(new UserRegistered(user.Id, now), cancellationToken);
-            transaction.Complete();
-        }
+        await scope.ServiceProvider.GetRequiredService<ModuleTransaction>().RunAsync(
+            async token =>
+            {
+                db.Users.Add(user);
+                await db.SaveChangesAsync(token);
+                await scope.ServiceProvider.GetRequiredService<IDomainEvents>().PublishAsync(new UserRegistered(user.Id, now), token);
+            },
+            cancellationToken);
 
         LogSeeded(user.Id, admin);
     }

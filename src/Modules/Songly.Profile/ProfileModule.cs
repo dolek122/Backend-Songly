@@ -17,6 +17,7 @@ public sealed class ProfileModule : IModule
     public void Register(IServiceCollection services, IConfiguration configuration)
     {
         services.AddModuleDbContext<ProfileDbContext>();
+        services.AddSingleton<AvatarFiles>();
         services.AddScoped<ProfileService>();
         services.AddScoped<UserSearch>();
         services.AddScoped<ProfileSummaries>();

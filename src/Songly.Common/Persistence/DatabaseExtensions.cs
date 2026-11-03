@@ -16,6 +16,10 @@ public static class DatabaseExtensions
     public static IServiceCollection AddSonglyDatabase(this IServiceCollection services)
     {
         services.AddSingleton(provider => NpgsqlDataSource.Create(ConnectionString(provider.GetRequiredService<IConfiguration>())));
+
+        // One per request: the handlers of a request defer into the transaction that request runs.
+        services.AddScoped<ModuleTransaction>();
+        services.AddScoped<IAfterCommit>(provider => provider.GetRequiredService<ModuleTransaction>());
         return services;
     }
 

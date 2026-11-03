@@ -5,4 +5,8 @@
     <ProjectReference Include="..\..\src\Songly.Common\Songly.Common.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\Shared\TestImages.cs" Link="Shared\TestImages.cs" />
+  </ItemGroup>
+
 </Project>

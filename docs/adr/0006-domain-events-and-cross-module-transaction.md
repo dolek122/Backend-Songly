@@ -1,6 +1,6 @@
 # ADR 0006: Domain events and one transaction across modules
 
-- Status: accepted
+- Status: accepted (the transaction became a scoped service with work after the commit in ADR 0010)
 - Date: 2026-11-02
 
 ## Context

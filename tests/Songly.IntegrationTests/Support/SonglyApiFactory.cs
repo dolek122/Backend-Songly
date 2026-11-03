@@ -1,3 +1,6 @@
+using Amazon.Runtime;
+using Amazon.S3;
+using Amazon.S3.Model;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -7,6 +10,7 @@ using Songly.Common.Events;
 using Songly.Common.Modules;
 using Songly.Common.Persistence;
 using Songly.Identity.Contracts;
+using Testcontainers.Minio;
 using Testcontainers.PostgreSql;
 using Testcontainers.Redis;
 
@@ -25,7 +29,19 @@ public sealed class SonglyApiFactory : WebApplicationFactory<Program>, IAsyncLif
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine").Build();
     private readonly RedisContainer _redis = new RedisBuilder("redis:7-alpine").Build();
 
+    // The Chainguard build of MinIO, as in docker-compose and the original's tests: MinIO no longer
+    // publishes its own images anonymously.
+    private readonly MinioContainer _minio = new MinioBuilder("cgr.dev/chainguard/minio:latest").Build();
+
+    public const string StorageBucket = "songly-media";
+
     public string ConnectionString => _postgres.GetConnectionString();
+
+    /// <summary>Where uploaded files are served from — fetched by tests anonymously, as clients do.</summary>
+    public string StoragePublicBaseUrl => $"{StorageEndpoint}/{StorageBucket}";
+
+    // Testcontainers ends the address with a slash; the key would then start with "//".
+    private string StorageEndpoint => _minio.GetConnectionString().TrimEnd('/');
 
     /// <summary>Every e-mail this application instance sent.</summary>
     public RecordingMailSender Mails => this.MailsOf();
@@ -37,8 +53,26 @@ public sealed class SonglyApiFactory : WebApplicationFactory<Program>, IAsyncLif
     /// </summary>
     public async ValueTask InitializeAsync()
     {
-        await Task.WhenAll(_postgres.StartAsync(), _redis.StartAsync());
+        await Task.WhenAll(_postgres.StartAsync(), _redis.StartAsync(), _minio.StartAsync());
+        await CreatePublicBucketAsync();
         _ = Services;
+    }
+
+    /// <summary>
+    /// What <c>minio-init</c> does in docker-compose: a bucket anyone can read from. Avatars are
+    /// public by design, and clients load them straight from the storage.
+    /// </summary>
+    private async Task CreatePublicBucketAsync()
+    {
+        using var client = new AmazonS3Client(
+            new BasicAWSCredentials(_minio.GetAccessKey(), _minio.GetSecretKey()),
+            new AmazonS3Config { ServiceURL = StorageEndpoint, ForcePathStyle = true, AuthenticationRegion = "us-east-1" });
+        await client.PutBucketAsync(StorageBucket);
+        await client.PutBucketPolicyAsync(new PutBucketPolicyRequest
+        {
+            BucketName = StorageBucket,
+            Policy = $$"""{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::{{StorageBucket}}/*"]}]}""",
+        });
     }
 
     public override async ValueTask DisposeAsync()
@@ -46,6 +80,7 @@ public sealed class SonglyApiFactory : WebApplicationFactory<Program>, IAsyncLif
         await base.DisposeAsync();
         await _postgres.DisposeAsync();
         await _redis.DisposeAsync();
+        await _minio.DisposeAsync();
     }
 
     /// <summary>
@@ -87,6 +122,10 @@ public sealed class SonglyApiFactory : WebApplicationFactory<Program>, IAsyncLif
     {
         builder.UseSetting("ConnectionStrings:Songly", ConnectionString);
         builder.UseSetting("ConnectionStrings:Redis", _redis.GetConnectionString());
+        builder.UseSetting("Songly:Storage:Endpoint", StorageEndpoint);
+        builder.UseSetting("Songly:Storage:AccessKey", _minio.GetAccessKey());
+        builder.UseSetting("Songly:Storage:SecretKey", _minio.GetSecretKey());
+        builder.UseSetting("Songly:Storage:PublicBaseUrl", StoragePublicBaseUrl);
 
         // Off here: they run at startup and would race tests that insert expired rows on purpose.
         // The tests of the jobs themselves turn them on in an instance of their own.
