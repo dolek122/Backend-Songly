@@ -21,7 +21,7 @@ does; this repository documents *how* it is done in .NET ([ADR 0001](docs/adr/00
 | Identity | Registration with e-mail verification, login, JWT + rotated refresh tokens with theft detection, password change and reset, live roles, suspensions with appeals, admin roles, account deletion (API and web page), session cleanup, local test accounts | ✅ |
 | Profile | Profiles created with the account, favourite genres, user search, public profiles hidden for suspended accounts, names for the administration, avatars stripped of metadata, genre popularity cached in Redis, the directory other modules read names and genres from | ✅ |
 | Social | Friend requests (mutual ones become a friendship), friends, blocking that ends the relation, block state for the profile screen, the graph other modules read friends and blocks from | ✅ |
-| Content | Posts, likes, comments, shares, feed | — |
+| Content | Posts, likes, comments, shares, the feed, posts in communities with moderation of posts and comments, content of blocked and suspended authors hidden on every path | 🚧 post images and reports next |
 | NowPlaying | Spotify integration, live status | — |
 | Matching | Genre-based matching | — |
 | Community | Communities, membership, roles (moderators named by the owner), bans (temporary or permanent), appeals to the moderators and escalation to the administration, the membership contract for content | ✅ |

@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using Songly.Common.Events;
 using Songly.Common.Paging;
+using Songly.Common.Persistence;
 using Songly.Community.Contracts;
 using Songly.Community.Domain;
 using Songly.Community.Http;
@@ -10,11 +12,11 @@ namespace Songly.Community.Communities;
 
 /// <summary>Communities, membership and roles.</summary>
 /// <remarks>
-/// The original publishes <c>CommunityMemberJoinedEvent</c>, <c>CommunityMemberRoleChangedEvent</c>
-/// and <c>CommunityDeletedEvent</c>; they arrive with their consumers (notification, content) —
-/// publishing to nobody would be code without behaviour.
+/// The original also publishes <c>CommunityMemberJoinedEvent</c> and
+/// <c>CommunityMemberRoleChangedEvent</c>; they arrive with their consumer, the notification
+/// module — publishing to nobody would be code without behaviour.
 /// </remarks>
-internal sealed class CommunityService(CommunityDbContext db, IProfileDirectory profiles, TimeProvider time)
+internal sealed class CommunityService(CommunityDbContext db, IProfileDirectory profiles, IDomainEvents events, ModuleTransaction transaction, TimeProvider time)
     : ICommunityMembership, ICommunityDirectory
 {
     /// <summary>The creator becomes the owner — and a member, so that lists and counts include them.</summary>
@@ -52,7 +54,27 @@ internal sealed class CommunityService(CommunityDbContext db, IProfileDirectory 
     public async Task DeleteAsync(Guid communityId, Guid requesterId, CancellationToken cancellationToken)
     {
         await RequireOwnedAsync(communityId, requesterId, cancellationToken);
-        await db.Communities.Where(c => c.Id == communityId).ExecuteDeleteAsync(cancellationToken);
+        await transaction.RunAsync(token => DeleteWithDependentsAsync([communityId], token), cancellationToken);
+    }
+
+    /// <summary>
+    /// Deletes communities together with what other modules keep in them: <see cref="CommunityDeleted"/>
+    /// for each, then the rows. Runs inside a transaction — the caller's (account deletion) or the
+    /// one <see cref="DeleteAsync"/> opens — so the posts and the community go together or not at all.
+    /// </summary>
+    /// <remarks>
+    /// The event goes first: <c>posts.community_id</c> references the community, so the posts must
+    /// be gone before its row is. Memberships and bans go by <c>ON DELETE CASCADE</c>, which is
+    /// within this module.
+    /// </remarks>
+    public async Task DeleteWithDependentsAsync(IReadOnlyCollection<Guid> communityIds, CancellationToken cancellationToken)
+    {
+        foreach (var communityId in communityIds)
+        {
+            await events.PublishAsync(new CommunityDeleted(communityId), cancellationToken);
+        }
+
+        await db.Communities.Where(c => communityIds.Contains(c.Id)).ExecuteDeleteAsync(cancellationToken);
     }
 
     public async Task<CommunityResponse> GetAsync(Guid communityId, Guid viewerId, CancellationToken cancellationToken) =>

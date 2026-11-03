@@ -15,12 +15,15 @@ namespace Songly.Community.Communities;
 /// community; if they went with the moderator's account, a moderator leaving would quietly let
 /// back in everyone they banned.</item>
 /// <item>The memberships, and the communities the account owns — whole, with everyone else's
-/// memberships and bans (<c>ON DELETE CASCADE</c> within this module).</item>
+/// memberships and bans (<c>ON DELETE CASCADE</c> within this module) and everyone else's posts in
+/// them (<see cref="Contracts.CommunityDeleted"/>, handled by content). A bulk delete of the owned
+/// communities alone would publish nothing, and the posts in them would block the delete with
+/// their foreign key.</item>
 /// </list>
 /// Bulk statements, which is also a condition of correctness: deleting an owned community cascades
 /// into rows a per-entity delete would then try to delete a second time.
 /// </remarks>
-internal sealed class DeleteCommunityDataOnAccountDeletion(CommunityDbContext db) : IDomainEventHandler<UserAccountDeletionRequested>
+internal sealed class DeleteCommunityDataOnAccountDeletion(CommunityDbContext db, CommunityService communities) : IDomainEventHandler<UserAccountDeletionRequested>
 {
     public async Task HandleAsync(UserAccountDeletionRequested domainEvent, CancellationToken cancellationToken)
     {
@@ -28,6 +31,7 @@ internal sealed class DeleteCommunityDataOnAccountDeletion(CommunityDbContext db
         await db.Bans.Where(b => b.UserId == userId).ExecuteDeleteAsync(cancellationToken);
         await db.Bans.Where(b => b.BannedBy == userId).ExecuteUpdateAsync(b => b.SetProperty(x => x.BannedBy, (Guid?)null), cancellationToken);
         await db.Members.Where(m => m.UserId == userId).ExecuteDeleteAsync(cancellationToken);
-        await db.Communities.Where(c => c.OwnerId == userId).ExecuteDeleteAsync(cancellationToken);
+        var owned = await db.Communities.Where(c => c.OwnerId == userId).Select(c => c.Id).ToListAsync(cancellationToken);
+        await communities.DeleteWithDependentsAsync(owned, cancellationToken);
     }
 }
