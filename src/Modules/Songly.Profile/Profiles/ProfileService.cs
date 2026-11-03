@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Songly.Common.Media;
 using Songly.Common.Paging;
 using Songly.Identity.Contracts;
 using Songly.Profile.Domain;
@@ -8,7 +9,7 @@ using Songly.Profile.Persistence;
 namespace Songly.Profile.Profiles;
 
 /// <summary>The caller's own profile, other users' public profiles, and favourite genres.</summary>
-internal sealed class ProfileService(ProfileDbContext db, ISuspendedAccounts suspendedAccounts, TimeProvider time)
+internal sealed class ProfileService(ProfileDbContext db, ISuspendedAccounts suspendedAccounts, AvatarFiles avatars, TimeProvider time)
 {
     /// <summary>
     /// The default profile of a new account, created inside the transaction that creates the
@@ -58,7 +59,7 @@ internal sealed class ProfileService(ProfileDbContext db, ISuspendedAccounts sus
             profile.UserId,
             profile.DisplayName,
             profile.Bio,
-            AvatarUrls.Of(profile),
+            avatars.UrlOf(profile),
             await FavoriteGenresAsync(userId, cancellationToken));
     }
 
@@ -93,12 +94,54 @@ internal sealed class ProfileService(ProfileDbContext db, ISuspendedAccounts sus
             .Select(genre => new GenreResponse(genre.Id, genre.Name))
             .ToListAsync(cancellationToken);
 
+    /// <summary>
+    /// Stores a new avatar and returns the updated profile.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The file goes <b>through the backend</b>, not straight to the storage on a pre-signed URL
+    /// (original ADR 0010): only here can the bytes be checked to be an image and stripped of their
+    /// metadata (<see cref="SanitizedImage"/>). With a pre-signed URL the client uploads anything
+    /// and gets a public address on our domain for it.
+    /// </para>
+    /// <para>
+    /// The file is stored <b>before</b> the save, so a failed save leaves it orphaned. That is the
+    /// side of the mistake chosen on purpose: the other order could leave a row pointing to a file
+    /// that is not there. The previous file is deleted <b>after</b> the save, for the same reason.
+    /// </para>
+    /// </remarks>
+    public async Task<ProfileResponse> UploadAvatarAsync(Guid userId, byte[] content, CancellationToken cancellationToken)
+    {
+        var image = SanitizedImage.From(content);
+        var profile = await FindAsync(userId, cancellationToken);
+
+        var key = AvatarFiles.NewKey(userId, image.Type);
+        await avatars.StoreAsync(key, image, cancellationToken);
+        var previous = profile.ChangeAvatar(key, time.GetUtcNow());
+        await db.SaveChangesAsync(cancellationToken);
+
+        await DeleteIfOrphanedAsync(previous, cancellationToken);
+        return ToResponse(profile);
+    }
+
+    public async Task DeleteAvatarAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        var profile = await FindAsync(userId, cancellationToken);
+        var previous = profile.ChangeAvatar(null, time.GetUtcNow());
+        await db.SaveChangesAsync(cancellationToken);
+
+        await DeleteIfOrphanedAsync(previous, cancellationToken);
+    }
+
+    private Task DeleteIfOrphanedAsync(string? key, CancellationToken cancellationToken) =>
+        key is null ? Task.CompletedTask : avatars.DeleteOrphanedAsync(key, cancellationToken);
+
     private async Task<UserProfile> FindAsync(Guid userId, CancellationToken cancellationToken) =>
         await db.Profiles.SingleOrDefaultAsync(profile => profile.UserId == userId, cancellationToken)
             ?? throw new ProfileNotFoundException();
 
-    private static ProfileResponse ToResponse(UserProfile profile) =>
-        new(profile.UserId, profile.DisplayName, profile.Bio, AvatarUrls.Of(profile));
+    private ProfileResponse ToResponse(UserProfile profile) =>
+        new(profile.UserId, profile.DisplayName, profile.Bio, avatars.UrlOf(profile));
 
     private static GenreResponse ToResponse(Genre genre) => new(genre.Id, genre.Name);
 }

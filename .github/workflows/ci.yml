@@ -26,7 +26,7 @@ jobs:
       - name: Build
         run: dotnet build Songly.slnx -c Release --no-restore
 
-      # Integration tests start Postgres through Testcontainers; the runner has Docker.
+      # Integration tests start Postgres, Redis and MinIO through Testcontainers; the runner has Docker.
       - name: Test
         run: dotnet test --solution Songly.slnx -c Release --no-build
 

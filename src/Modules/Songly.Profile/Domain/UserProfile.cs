@@ -41,6 +41,20 @@ internal sealed class UserProfile
 
     public DateTimeOffset UpdatedAt { get; private set; }
 
+    /// <summary>
+    /// Points the profile to another avatar file (or none). A separate operation from editing the
+    /// profile because a file is involved: the caller has to know which key stopped being used, to
+    /// delete it once the database no longer points to it.
+    /// </summary>
+    /// <returns>The previous key, if there was one and it changed.</returns>
+    public string? ChangeAvatar(string? key, DateTimeOffset now)
+    {
+        var previous = AvatarKey;
+        AvatarKey = key;
+        UpdatedAt = now;
+        return previous == key ? null : previous;
+    }
+
     /// <summary>Replaces both fields: a bio left out of the request is a bio removed.</summary>
     public void Update(string displayName, string? bio, DateTimeOffset now)
     {

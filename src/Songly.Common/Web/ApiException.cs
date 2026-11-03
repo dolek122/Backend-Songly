@@ -11,8 +11,8 @@ namespace Songly.Common.Web;
 /// </remarks>
 public abstract class ApiException : Exception
 {
-    protected ApiException(int statusCode, string code, string message)
-        : base(message)
+    protected ApiException(int statusCode, string code, string message, Exception? innerException = null)
+        : base(message, innerException)
     {
         StatusCode = statusCode;
         Code = code;

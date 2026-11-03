@@ -10,7 +10,7 @@ namespace Songly.Profile.Profiles;
 /// Finding people by display name — to add them as friends (the social module sends a friend
 /// request by <c>addresseeId</c>, which there was no other way to get).
 /// </summary>
-internal sealed class UserSearch(ProfileDbContext db, ISuspendedAccounts suspendedAccounts)
+internal sealed class UserSearch(ProfileDbContext db, ISuspendedAccounts suspendedAccounts, AvatarFiles avatars)
 {
     /// <summary>
     /// A case-insensitive fragment of the display name. A blank query is an empty page — never
@@ -51,7 +51,7 @@ internal sealed class UserSearch(ProfileDbContext db, ISuspendedAccounts suspend
             .Where(profile => EF.Functions.ILike(profile.DisplayName, pattern, LikeEscape) && !excluded.Contains(profile.UserId))
             .OrderBy(profile => profile.DisplayName)
             .ThenBy(profile => profile.UserId)
-            .ToPageAsync(page, profile => new UserSearchResponse(profile.UserId, profile.DisplayName, AvatarUrls.Of(profile)), cancellationToken);
+            .ToPageAsync(page, profile => new UserSearchResponse(profile.UserId, profile.DisplayName, avatars.UrlOf(profile)), cancellationToken);
     }
 
     private const string LikeEscape = "\\";

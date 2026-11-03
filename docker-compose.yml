@@ -27,6 +27,42 @@ services:
       timeout: 5s
       retries: 10
 
+  # Object storage for avatars and post photos (original ADR 0010); S3 or R2 in production.
+  # The Chainguard image, as in the original: MinIO withdrew minio/minio from Docker Hub and then
+  # closed anonymous pulls from quay.io. It contains mc and sh, so minio-init uses it too.
+  minio:
+    image: cgr.dev/chainguard/minio:latest
+    container_name: songly-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: songly
+      MINIO_ROOT_PASSWORD: songly-dev-secret
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - songly-minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Creates the bucket and opens it for reading: avatars and post photos are public by design, and
+  # clients load them directly, not through the API. Exits when done.
+  minio-init:
+    image: cgr.dev/chainguard/minio:latest
+    container_name: songly-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 songly songly-dev-secret &&
+      mc mb --ignore-existing local/songly-media &&
+      mc anonymous set download local/songly-media
+      "
+
   # The API itself, for running the whole stack without the .NET SDK:
   #   docker compose --profile app up --build
   # Left out of the default profile so `dotnet run` can use port 8080 during development.
@@ -39,11 +75,15 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     environment:
       ConnectionStrings__Songly: "Host=postgres;Port=5432;Database=songly;Username=songly;Password=songly"
       ConnectionStrings__Redis: "redis:6379"
+      Songly__Storage__Endpoint: "http://minio:9000"
     ports:
       - "8080:8080"
 
 volumes:
   songly-postgres-data:
+  songly-minio-data:

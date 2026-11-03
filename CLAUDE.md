@@ -25,7 +25,7 @@ concern per change).
 dotnet build Songly.slnx
 dotnet test                                   # needs Docker (Testcontainers)
 dotnet format Songly.slnx --verify-no-changes # CI fails on unformatted code
-docker compose up -d postgres redis && dotnet run --project src/Songly.Api
+docker compose up -d postgres redis minio minio-init && dotnet run --project src/Songly.Api
 dotnet run --project src/Songly.Api --launch-profile local  # + test accounts (admin@songly.local, user@songly.local / Songly123!)
 ```
 
@@ -47,9 +47,12 @@ The repo uses Microsoft.Testing.Platform (`global.json`). Filter with
   `IModule.UsePipeline` (identity does: authentication, authorization).
 - Each module has its own `DbContext` (`AddModuleDbContext<T>`), mapping only its own tables.
 - Modules react to each other through domain events (`IDomainEvents`, `IDomainEventHandler<T>`,
-  ADR 0006). Publish inside a `ModuleTransaction` for "all or nothing" (handlers share the
+  ADR 0006). Publish inside `ModuleTransaction.RunAsync` for "all or nothing" (handlers share the
   transaction), after the save for reactions to a committed fact. `UserRegistered` is published
   inside the account's transaction (ADR 0008); its handlers must not send anything outside.
+- A handler inside a transaction that must change something outside the database (delete a file
+  its deleted rows pointed to) defers it with `IAfterCommit.Defer` — it runs only after the commit
+  (ADR 0010). Rows go inside the transaction, files after it.
 - **A module with per-user data handles `UserAccountDeletionRequested`** and deletes that data —
   otherwise account deletion fails on a foreign key. Keep the "what we delete" list on the
   `/account-deletion` page (`AccountDeletionPages`) in step with those handlers.
@@ -85,6 +88,9 @@ The repo uses Microsoft.Testing.Platform (`global.json`). Filter with
   most 100) and return `PagedResponse<T>` via `ToPageAsync` on an **ordered** query with the
   filters inside it (ADR 0009). A required set of ids from the query string goes through
   `RequiredGuidSet` (`?ids=a&ids=b` and `?ids=a,b` alike — the mobile app sends the latter).
+- Files go to `IObjectStorage`; keys are stored, never URLs (`PublicUrl(key)` builds the address).
+  Uploaded images go through `SanitizedImage.From` first — format from content, metadata removed
+  (ADR 0010). Upload the new file before the save, delete the old one after it.
 - "At most once per interval" goes through `IIntervalGate` (Redis, fail-open). Never make a
   request depend on Redis being up.
 - Periodic work is a `BackgroundService` with a `PeriodicTimer` on `TimeProvider`, a DI scope per
@@ -111,6 +117,9 @@ The repo uses Microsoft.Testing.Platform (`global.json`). Filter with
   app instance on the same database and Redis. Background jobs are off in the shared instance.
 - Data that must not reach the shared database (fixed e-mail addresses, an extra administrator)
   goes to a `TemporaryDatabase` of its own: `factory.WithSettings(database.Settings)`.
+- Uploaded files are checked in the real MinIO by fetching `factory.StoragePublicBaseUrl/...`
+  anonymously, as clients do. Test images come from `tests/Shared/TestImages.cs` (no image library:
+  compare results byte for byte).
 - Run a new test class on its own too (`--filter-class`): passing only as part of the full suite
   means it depends on another test having run first.
 - When porting a module, port the scenarios of the original's tests for it — they are the

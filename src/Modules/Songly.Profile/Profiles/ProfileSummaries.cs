@@ -16,7 +16,7 @@ namespace Songly.Profile.Profiles;
 /// about. Hiding a suspended account's content protects other users; from the administrator it
 /// would only hide whom their own decision concerns.
 /// </remarks>
-internal sealed class ProfileSummaries(ProfileDbContext db, ISuspendedAccounts suspendedAccounts)
+internal sealed class ProfileSummaries(ProfileDbContext db, ISuspendedAccounts suspendedAccounts, AvatarFiles avatars)
 {
     public const int MaxIds = 100;
 
@@ -35,7 +35,7 @@ internal sealed class ProfileSummaries(ProfileDbContext db, ISuspendedAccounts s
             .OrderBy(profile => profile.UserId)
             .ToListAsync(cancellationToken);
         return profiles
-            .Select(profile => new ProfileSummaryResponse(profile.UserId, profile.DisplayName, AvatarUrls.Of(profile), suspended.Contains(profile.UserId)))
+            .Select(profile => new ProfileSummaryResponse(profile.UserId, profile.DisplayName, avatars.UrlOf(profile), suspended.Contains(profile.UserId)))
             .ToList();
     }
 }

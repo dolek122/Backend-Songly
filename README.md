@@ -16,10 +16,10 @@ does; this repository documents *how* it is done in .NET ([ADR 0001](docs/adr/00
 
 | Module | Responsibility | Status |
 |---|---|---|
-| Common | Error format, request correlation, JSON conventions, validation, paging, e-mail channel, Redis interval gates, domain events, cross-module transactions | ✅ |
+| Common | Error format, request correlation, JSON conventions, validation, paging, e-mail channel, Redis interval gates, domain events, cross-module transactions with work after the commit, object storage, image metadata removal | ✅ |
 | Migrations | Schema (33 original migrations) | ✅ |
 | Identity | Registration with e-mail verification, login, JWT + rotated refresh tokens with theft detection, password change and reset, live roles, suspensions with appeals, admin roles, account deletion (API and web page), session cleanup, local test accounts | ✅ |
-| Profile | Profiles created with the account, favourite genres, user search, public profiles hidden for suspended accounts, names for the administration | 🚧 avatars and genre popularity next |
+| Profile | Profiles created with the account, favourite genres, user search, public profiles hidden for suspended accounts, names for the administration, avatars stripped of metadata | 🚧 genre popularity next |
 | Social | Friends, friend requests, blocking | — |
 | Content | Posts, likes, comments, shares, feed | — |
 | NowPlaying | Spotify integration, live status | — |
@@ -95,14 +95,19 @@ goes out from a background queue, so the response never waits for the mail serve
 and a failed run is logged and retried at the next interval — in .NET an exception escaping a
 background service would stop the whole application ([ADR 0007](docs/adr/0007-background-jobs.md)).
 
+**Uploaded photos lose their metadata.** The format is recognised by content (never by the file
+name), and the file is rewritten without EXIF, GPS, XMP or thumbnails — only the orientation
+survives — before it reaches the storage. A file nothing points to any more is deleted only after
+the transaction that orphaned it commits ([ADR 0010](docs/adr/0010-object-storage-uploads-and-work-after-the-commit.md)).
+
 **Every request is correlated.** It gets an id (or keeps a sanitised one from the client), returned
 in `X-Request-Id` and attached to every log line, so a user's bug report leads to exactly their
 request.
 
 ## Tech stack
 
-.NET 10 · ASP.NET Core Minimal APIs · EF Core · PostgreSQL 16 · Redis · DbUp · JWT bearer auth · bcrypt ·
-MailKit · Serilog (JSON logs) ·
+.NET 10 · ASP.NET Core Minimal APIs · EF Core · PostgreSQL 16 · Redis · S3 / MinIO · DbUp · JWT bearer auth ·
+bcrypt · MailKit · Serilog (JSON logs) ·
 OpenAPI + Scalar · xUnit v3 · Testcontainers · ArchUnitNET · Docker · GitHub Actions
 
 ## Running locally
@@ -110,7 +115,7 @@ OpenAPI + Scalar · xUnit v3 · Testcontainers · ArchUnitNET · Docker · GitHu
 Requirements: [.NET 10 SDK](https://dotnet.microsoft.com/download) and Docker.
 
 ```bash
-docker compose up -d postgres redis
+docker compose up -d postgres redis minio minio-init
 ```
 
 ```bash
@@ -148,7 +153,7 @@ docker compose --profile app up --build
 dotnet test
 ```
 
-Integration tests start PostgreSQL, Redis and (for the SMTP test) a test mail server in
+Integration tests start PostgreSQL, Redis, MinIO and (for the SMTP test) a test mail server in
 containers, so Docker must be running. They run against the
 real database on purpose — an in-memory substitute would lie about how Postgres behaves.
 

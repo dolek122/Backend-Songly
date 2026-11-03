@@ -33,6 +33,7 @@ internal sealed partial class AccountDeletionService(
     IdentityDbContext db,
     PasswordHasher passwords,
     AccountEraser eraser,
+    ModuleTransaction transaction,
     AccountDeletionMailer mailer,
     IOptions<AccountDeletionOptions> options,
     IdentityMetrics metrics,
@@ -137,12 +138,8 @@ internal sealed partial class AccountDeletionService(
             .SingleOrDefaultAsync(cancellationToken);
     }
 
-    private async Task EraseAsync(Guid userId, CancellationToken cancellationToken)
-    {
-        using var transaction = ModuleTransaction.Begin();
-        await eraser.EraseAsync(userId, cancellationToken);
-        transaction.Complete();
-    }
+    private Task EraseAsync(Guid userId, CancellationToken cancellationToken) =>
+        transaction.RunAsync(token => eraser.EraseAsync(userId, token), cancellationToken);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Deleting account {UserId} at the user's request (GDPR)")]
     private partial void LogDeletingOnRequest(Guid userId);

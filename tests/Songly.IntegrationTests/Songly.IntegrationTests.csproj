@@ -3,12 +3,17 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <PackageReference Include="Testcontainers" />
+    <PackageReference Include="Testcontainers.Minio" />
     <PackageReference Include="Testcontainers.PostgreSql" />
     <PackageReference Include="Testcontainers.Redis" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Songly.Api\Songly.Api.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Shared\TestImages.cs" Link="Shared\TestImages.cs" />
   </ItemGroup>
 
 </Project>

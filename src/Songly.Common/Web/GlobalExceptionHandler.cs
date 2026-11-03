@@ -78,7 +78,11 @@ internal sealed partial class GlobalExceptionHandler(ILogger<GlobalExceptionHand
     /// </remarks>
     private static (int, string, string) MapBadRequest(BadHttpRequestException exception)
     {
-        if (exception.StatusCode == StatusCodes.Status413PayloadTooLarge)
+        // Either the whole request is over its limit (Kestrel answers 413), or one file in a
+        // multipart form is over the form's limit — which the form reader reports as a 400 around
+        // an InvalidDataException. To the client both are the same: the file is too large.
+        if (exception.StatusCode == StatusCodes.Status413PayloadTooLarge
+            || exception.InnerException is InvalidDataException { Message: var formError } && formError.StartsWith("Multipart body length limit", StringComparison.Ordinal))
         {
             return (StatusCodes.Status413PayloadTooLarge, "FILE_TOO_LARGE", "Przesłany plik jest za duży");
         }
@@ -98,9 +102,14 @@ internal sealed partial class GlobalExceptionHandler(ILogger<GlobalExceptionHand
 
         if (MissingParameter().Match(exception.Message) is { Success: true } missing)
         {
-            return missing.Groups["source"].Value == "body"
-                ? (badRequest, "MALFORMED_REQUEST", unreadableBody)
-                : (badRequest, "MISSING_PARAMETER", $"Brak wymaganego parametru: {missing.Groups["name"].Value}");
+            return missing.Groups["source"].Value switch
+            {
+                "body" => (badRequest, "MALFORMED_REQUEST", unreadableBody),
+
+                // A file part of a multipart form (Spring's MissingServletRequestPartException).
+                "form" => (badRequest, "MISSING_PARAMETER", $"Brak wymaganej części żądania: {missing.Groups["name"].Value}"),
+                _ => (badRequest, "MISSING_PARAMETER", $"Brak wymaganego parametru: {missing.Groups["name"].Value}"),
+            };
         }
 
         if (InvalidParameter().Match(exception.Message) is { Success: true } invalid)

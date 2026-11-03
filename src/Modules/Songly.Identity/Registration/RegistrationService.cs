@@ -43,6 +43,7 @@ internal sealed partial class RegistrationService(
     RegistrationMailer mailer,
     IIntervalGate gate,
     IDomainEvents events,
+    ModuleTransaction transaction,
     IOptions<RegistrationOptions> options,
     IdentityMetrics metrics,
     TimeProvider time,
@@ -128,33 +129,39 @@ internal sealed partial class RegistrationService(
 
         // One transaction across modules (ADR 0006): the account, the profile other modules create
         // for it, and the session exist together or not at all.
-        using var transaction = ModuleTransaction.Begin();
+        var verified = await transaction.RunAsync(
+            async token =>
+            {
+                // A race: someone may have confirmed the same address through another registration
+                // in the meantime. Clean up and refuse exactly as for a bad token — a distinct message
+                // would tell the asker that the address has an account.
+                if (await db.Users.AnyAsync(user => user.Email == pending.Email, token))
+                {
+                    db.PendingRegistrations.Remove(pending);
+                    await db.SaveChangesAsync(token);
+                    return null;
+                }
 
-        // A race: someone may have confirmed the same address through another registration in the
-        // meantime. Clean up and refuse exactly as for a bad token — a distinct message would tell
-        // the asker that the address has an account.
-        if (await db.Users.AnyAsync(user => user.Email == pending.Email, cancellationToken))
+                var user = new User(pending.Email, pending.PasswordHash, now);
+                db.Users.Add(user);
+                db.PendingRegistrations.Remove(pending);
+
+                // Saved before the handlers and the session: their rows reference the user, and EF
+                // Core does not know that (no navigation is mapped), so it would not order the inserts.
+                await db.SaveChangesAsync(token);
+                await events.PublishAsync(new UserRegistered(user.Id, now), token);
+                return new { user.Id, Tokens = await tokens.IssueForAsync(user.Id, token) };
+            },
+            cancellationToken);
+
+        if (verified is null)
         {
-            db.PendingRegistrations.Remove(pending);
-            await db.SaveChangesAsync(cancellationToken);
-            transaction.Complete();
             throw InvalidToken();
         }
 
-        var user = new User(pending.Email, pending.PasswordHash, now);
-        db.Users.Add(user);
-        db.PendingRegistrations.Remove(pending);
-
-        // Saved before the handlers and the session: their rows reference the user, and EF Core
-        // does not know that (no navigation is mapped), so it would not order the inserts.
-        await db.SaveChangesAsync(cancellationToken);
-        await events.PublishAsync(new UserRegistered(user.Id, now), cancellationToken);
-        var response = await tokens.IssueForAsync(user.Id, cancellationToken);
-        transaction.Complete();
-
         metrics.Registration("verified");
-        LogVerified(user.Id);
-        return response;
+        LogVerified(verified.Id);
+        return verified.Tokens;
     }
 
     private InvalidVerificationTokenException InvalidToken()
