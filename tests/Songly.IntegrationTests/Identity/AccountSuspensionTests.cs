@@ -41,6 +41,10 @@ public sealed class AccountSuspensionTests(SonglyApiFactory factory)
         Assert.Equal(HttpStatusCode.NoContent, (await Suspend(admin, troll.Id, new { reason = "nękanie innych" })).StatusCode);
 
         await (await _client.GetAsync("/probe-secured/whoami", troll.Token)).ReadErrorAsync(HttpStatusCode.Forbidden, "ACCOUNT_SUSPENDED");
+
+        // Reading is cut off as much as writing: a suspended account is not present in the product.
+        await (await _client.PostJsonAsync("/api/v1/posts", new { content = "nie powinno przejść" }, troll.Token)).ReadErrorAsync(HttpStatusCode.Forbidden, "ACCOUNT_SUSPENDED");
+        await (await _client.GetAsync("/api/v1/feed", troll.Token)).ReadErrorAsync(HttpStatusCode.Forbidden, "ACCOUNT_SUSPENDED");
         await (await _client.PutJsonAsync("/api/v1/auth/password", new { currentPassword = troll.User.Password, newPassword = "brand-new-password" }, troll.Token))
             .ReadErrorAsync(HttpStatusCode.Forbidden, "ACCOUNT_SUSPENDED");
 

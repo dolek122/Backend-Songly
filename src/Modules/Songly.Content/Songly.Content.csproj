@@ -1,2 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <!--
+      Contracts only: identity for account deletion and suspended accounts, profile for names and
+      avatars, social for friends and blocks, community for membership, moderation and deletion.
+    -->
+    <ProjectReference Include="..\Songly.Identity\Songly.Identity.csproj" />
+    <ProjectReference Include="..\Songly.Profile\Songly.Profile.csproj" />
+    <ProjectReference Include="..\Songly.Social\Songly.Social.csproj" />
+    <ProjectReference Include="..\Songly.Community\Songly.Community.csproj" />
+  </ItemGroup>
+
 </Project>
