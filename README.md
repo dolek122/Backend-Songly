@@ -24,7 +24,7 @@ does; this repository documents *how* it is done in .NET ([ADR 0001](docs/adr/00
 | Content | Posts, likes, comments, shares, feed | — |
 | NowPlaying | Spotify integration, live status | — |
 | Matching | Genre-based matching | — |
-| Community | Communities, membership, roles (moderators named by the owner), the membership contract for content | 🚧 bans, appeals and escalation next |
+| Community | Communities, membership, roles (moderators named by the owner), bans (temporary or permanent), appeals to the moderators and escalation to the administration, the membership contract for content | ✅ |
 | Notification | Inbox, e-mail, push | — |
 | Analytics | PII-free event counters | — |
 | ModerationLog | History of moderation decisions | — |
