@@ -2,11 +2,13 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Songly.Common.Modules;
 using Songly.Common.Persistence;
 using Songly.Identity.AccountDeletion;
 using Songly.Identity.Administration;
 using Songly.Identity.Http;
+using Songly.Identity.LocalDevelopment;
 using Songly.Identity.PasswordReset;
 using Songly.Identity.Persistence;
 using Songly.Identity.Registration;
@@ -30,6 +32,16 @@ public sealed class IdentityModule : IModule
         services.AddScoped<TokenIssuer>();
         services.AddScoped<AuthService>();
 
+        services.AddOptions<SessionCleanupOptions>()
+            .Bind(configuration.GetSection(SessionCleanupOptions.Section))
+            // A negative retention would move the cutoff into the future and delete sessions
+            // that are still valid, logging their owners out.
+            .Validate(
+                o => o.Interval > TimeSpan.Zero && o.Retention >= TimeSpan.Zero && o.BatchSize > 0 && o.MaxBatchesPerRun > 0,
+                $"{SessionCleanupOptions.Section}: Interval, BatchSize and MaxBatchesPerRun must be positive, Retention must not be negative")
+            .ValidateOnStart();
+        services.AddHostedService<SessionCleanupJob>();
+
         services.AddOptions<RegistrationOptions>().Bind(configuration.GetSection(RegistrationOptions.Section));
         services.AddScoped<RegistrationMailer>();
         services.AddScoped<RegistrationService>();
@@ -47,6 +59,10 @@ public sealed class IdentityModule : IModule
         services.AddSingleton<AdministrationMetrics>();
         services.AddScoped<AccountSuspensionService>();
         services.AddScoped<AdminRoleService>();
+
+        services.AddOptions<LocalDevAccountsOptions>().Bind(configuration.GetSection(LocalDevAccountsOptions.Section)).ValidateOnStart();
+        services.AddSingleton<IValidateOptions<LocalDevAccountsOptions>, LocalDevAccountsOptionsValidator>();
+        services.AddHostedService<LocalDevAccountsSeeder>();
     }
 
     public void UsePipeline(IApplicationBuilder app) => app.UseSonglyAuthentication();
