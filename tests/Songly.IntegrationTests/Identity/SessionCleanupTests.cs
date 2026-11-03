@@ -69,17 +69,17 @@ public sealed class SessionCleanupTests(SonglyApiFactory factory)
             ("Songly:Security:SessionCleanup:MaxBatchesPerRun", "2")))
         {
             _ = app.Services;
-            await WaitUntil(async () => await SessionsOf(user.Id) <= 1);
+            await WaitUntil(async () => await LongAgoSessionsOf(user.Id) <= 1);
         }
 
-        Assert.Equal(1L, await SessionsOf(user.Id));
+        Assert.Equal(1L, await LongAgoSessionsOf(user.Id));
         Assert.Equal(1L, await factory.QuerySingleAsync<long>(
             "SELECT count(*) FROM sessions WHERE user_id = @id AND expires_at = @newest",
             ("id", user.Id),
             ("newest", LongAgo.AddMinutes(4))));
 
         // The leftover is older than anything else, so it would take a slot in another test's run.
-        await factory.ExecuteSqlAsync("DELETE FROM sessions WHERE user_id = @id", ("id", user.Id));
+        await factory.ExecuteSqlAsync("DELETE FROM sessions WHERE user_id = @id AND expires_at < @before", ("id", user.Id), ("before", LongAgo.AddDays(1)));
     }
 
     /// <summary>
@@ -146,8 +146,9 @@ public sealed class SessionCleanupTests(SonglyApiFactory factory)
     private async Task<bool> Exists(Guid sessionId) =>
         await factory.QuerySingleAsync<long>("SELECT count(*) FROM sessions WHERE id = @id", ("id", sessionId)) == 1;
 
-    private Task<long> SessionsOf(Guid userId) =>
-        factory.QuerySingleAsync<long>("SELECT count(*) FROM sessions WHERE user_id = @id", ("id", userId));
+    // Only the rows this test inserted: the account also has the live session its registration opened.
+    private Task<long> LongAgoSessionsOf(Guid userId) =>
+        factory.QuerySingleAsync<long>("SELECT count(*) FROM sessions WHERE user_id = @id AND expires_at < @before", ("id", userId), ("before", LongAgo.AddDays(1)));
 
     private static async Task WaitUntil(Func<Task<bool>> condition)
     {

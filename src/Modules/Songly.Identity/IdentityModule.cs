@@ -7,6 +7,7 @@ using Songly.Common.Modules;
 using Songly.Common.Persistence;
 using Songly.Identity.AccountDeletion;
 using Songly.Identity.Administration;
+using Songly.Identity.Contracts;
 using Songly.Identity.Http;
 using Songly.Identity.LocalDevelopment;
 using Songly.Identity.PasswordReset;
@@ -31,6 +32,7 @@ public sealed class IdentityModule : IModule
         services.AddSingleton<IdentityMetrics>();
         services.AddScoped<TokenIssuer>();
         services.AddScoped<AuthService>();
+        services.AddScoped<ISuspendedAccounts, SuspendedAccounts>();
 
         services.AddOptions<SessionCleanupOptions>()
             .Bind(configuration.GetSection(SessionCleanupOptions.Section))

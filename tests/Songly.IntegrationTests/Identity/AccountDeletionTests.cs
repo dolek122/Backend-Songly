@@ -35,11 +35,15 @@ public sealed class AccountDeletionTests(SonglyApiFactory factory)
     {
         var user = await factory.CreateLoggedInUserAsync(_client, "delete-me");
         await _client.LoginAsync(user.User);
+        await factory.ExecuteSqlAsync(
+            "INSERT INTO user_genres (user_id, genre_id, created_at) SELECT @id, id, now() FROM genres LIMIT 2", ("id", user.Id));
 
         Assert.Equal(HttpStatusCode.NoContent, (await DeleteAccount(user)).StatusCode);
 
         Assert.Equal(0L, await CountRows("users", user.Id));
         Assert.Equal(0L, await CountRows("sessions", user.Id));
+        Assert.Equal(0L, await CountRows("profiles", user.Id));
+        Assert.Equal(0L, await CountRows("user_genres", user.Id));
         Assert.Equal(HttpStatusCode.Unauthorized, (await _client.TryLoginAsync(user.User.Email, user.User.Password)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await _client.RefreshAsync(user.Tokens.RefreshToken)).StatusCode);
     }
@@ -128,12 +132,16 @@ public sealed class AccountDeletionTests(SonglyApiFactory factory)
     public async Task A_failing_module_rolls_the_whole_deletion_back()
     {
         var user = await factory.CreateLoggedInUserAsync(_client, "delete-rollback");
+        var sessions = await CountRows("sessions", user.Id);
         ProbeDeletionHandler.FailFor[user.Id] = 0;
 
         await (await DeleteAccount(user)).ReadErrorAsync(HttpStatusCode.InternalServerError, "INTERNAL_ERROR");
 
         Assert.Equal(1L, await CountRows("users", user.Id));
-        Assert.Equal(1L, await CountRows("sessions", user.Id));
+        Assert.Equal(sessions, await CountRows("sessions", user.Id));
+
+        // The profile module had already deleted the profile when the probe failed after it.
+        Assert.Equal(1L, await CountRows("profiles", user.Id));
         Assert.Equal(HttpStatusCode.OK, (await _client.RefreshAsync(user.Tokens.RefreshToken)).StatusCode);
     }
 }

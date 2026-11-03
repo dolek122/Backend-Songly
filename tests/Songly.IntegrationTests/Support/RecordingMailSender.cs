@@ -22,15 +22,22 @@ namespace Songly.IntegrationTests;
 /// </remarks>
 public sealed partial class RecordingMailSender(IMailSender inner) : IMailSender
 {
-    private readonly ConcurrentQueue<OutgoingEmail> _sent = new();
+    private readonly ConcurrentDictionary<string, ConcurrentQueue<OutgoingEmail>> _sent = new(StringComparer.Ordinal);
 
     public Task SendAsync(OutgoingEmail email, CancellationToken cancellationToken)
     {
-        _sent.Enqueue(email);
+        _sent.GetOrAdd(email.To, _ => new ConcurrentQueue<OutgoingEmail>()).Enqueue(email);
         return inner.SendAsync(email, cancellationToken);
     }
 
-    public IReadOnlyList<OutgoingEmail> SentTo(string recipient) => _sent.Where(mail => mail.To == recipient).ToList();
+    public IReadOnlyList<OutgoingEmail> SentTo(string recipient) =>
+        _sent.TryGetValue(recipient, out var mails) ? mails.ToList() : [];
+
+    /// <summary>
+    /// Forgets what was sent to <paramref name="recipient"/> — for a helper whose own mail (the
+    /// verification link of a new account) is setup, not what the test is about.
+    /// </summary>
+    public void ClearFor(string recipient) => _sent.TryRemove(recipient, out _);
 
     public OutgoingEmail LastTo(string recipient) =>
         SentTo(recipient).LastOrDefault() ?? throw new InvalidOperationException($"No e-mail was sent to {recipient}");

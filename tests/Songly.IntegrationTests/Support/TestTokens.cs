@@ -14,6 +14,9 @@ public static class TestTokens
     public static string HashOf(string refreshToken) =>
         Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(refreshToken)));
 
+    /// <summary>The account an access token belongs to.</summary>
+    public static Guid SubjectOf(string accessToken) => Guid.Parse(new JsonWebTokenHandler().ReadJsonWebToken(accessToken).Subject);
+
     /// <summary>
     /// An access token minted outside the application, for the cases the API never produces:
     /// expired, signed with another key, missing a subject.

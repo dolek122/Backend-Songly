@@ -27,6 +27,10 @@ public sealed class LocalDevAccountsTests(SonglyApiFactory factory)
 
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/v1/admin/admins", admin.AccessToken)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/v1/admin/admins", user.AccessToken)).StatusCode);
+
+        // Created the way verification creates an account, so they have profiles like any other.
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/v1/profiles/me", admin.AccessToken)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/v1/profiles/me", user.AccessToken)).StatusCode);
     }
 
     /// <summary>A restart must reset neither passwords nor whatever someone has clicked together.</summary>

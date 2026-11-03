@@ -3,6 +3,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Songly.Common.Events;
+using Songly.Common.Persistence;
+using Songly.Identity.Contracts;
 using Songly.Identity.Domain;
 using Songly.Identity.Persistence;
 using Songly.Identity.Security;
@@ -22,11 +25,10 @@ namespace Songly.Identity.LocalDevelopment;
 /// are required.
 /// </para>
 /// <para>
-/// The accounts are created the way e-mail verification creates one, and the administrator role is
-/// granted directly: the first administrator is by design created outside the API (original
-/// ADR 0021) — hence no entry in the moderation log. Nothing is published yet:
-/// <c>UserRegistered</c> arrives with the profile module, and both verification and this seeder
-/// publish it then, so the local accounts get profiles like any other.
+/// The accounts are created the way e-mail verification creates one — the row and
+/// <see cref="UserRegistered"/> in one transaction, so they get a profile like any other — and the
+/// administrator role is granted directly: the first administrator is by design created outside
+/// the API (original ADR 0021), hence no entry in the moderation log.
 /// </para>
 /// <para>
 /// Idempotent: an existing account is left untouched, so a restart resets neither passwords nor
@@ -52,29 +54,36 @@ internal sealed partial class LocalDevAccountsSeeder(
             return;
         }
 
-        await using var scope = scopes.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
-        await SeedAsync(db, AdminEmail, admin: true, cancellationToken);
-        await SeedAsync(db, UserEmail, admin: false, cancellationToken);
+        await SeedAsync(AdminEmail, admin: true, cancellationToken);
+        await SeedAsync(UserEmail, admin: false, cancellationToken);
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
-    private async Task SeedAsync(IdentityDbContext db, string email, bool admin, CancellationToken cancellationToken)
+    private async Task SeedAsync(string email, bool admin, CancellationToken cancellationToken)
     {
+        await using var scope = scopes.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
         if (await db.Users.AnyAsync(user => user.Email == email, cancellationToken))
         {
             return;
         }
 
-        var user = new User(email, passwords.Hash(Password), time.GetUtcNow());
+        var now = time.GetUtcNow();
+        var user = new User(email, passwords.Hash(Password), now);
         if (admin)
         {
             user.GrantAdmin();
         }
 
-        db.Users.Add(user);
-        await db.SaveChangesAsync(cancellationToken);
+        using (var transaction = ModuleTransaction.Begin())
+        {
+            db.Users.Add(user);
+            await db.SaveChangesAsync(cancellationToken);
+            await scope.ServiceProvider.GetRequiredService<IDomainEvents>().PublishAsync(new UserRegistered(user.Id, now), cancellationToken);
+            transaction.Complete();
+        }
+
         LogSeeded(user.Id, admin);
     }
 

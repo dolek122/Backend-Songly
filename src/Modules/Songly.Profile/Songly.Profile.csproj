@@ -1,2 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <!-- Contracts only: UserRegistered, UserAccountDeletionRequested, ISuspendedAccounts. -->
+    <ProjectReference Include="..\Songly.Identity\Songly.Identity.csproj" />
+  </ItemGroup>
+
 </Project>

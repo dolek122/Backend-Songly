@@ -21,5 +21,6 @@
     <Project Path="tests/Songly.Common.Tests/Songly.Common.Tests.csproj" />
     <Project Path="tests/Songly.Identity.Tests/Songly.Identity.Tests.csproj" />
     <Project Path="tests/Songly.IntegrationTests/Songly.IntegrationTests.csproj" />
+    <Project Path="tests/Songly.Profile.Tests/Songly.Profile.Tests.csproj" />
   </Folder>
 </Solution>

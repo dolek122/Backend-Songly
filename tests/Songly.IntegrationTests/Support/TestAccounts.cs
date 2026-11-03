@@ -10,24 +10,27 @@ public static class TestAccounts
     public static string UniqueEmail(string prefix) => $"{prefix}-{Guid.NewGuid():N}@songly.io";
 
     /// <summary>
-    /// Creates an account directly in the database.
+    /// Creates an account the way a user does: registration, the link from the e-mail, and a
+    /// display name — so the account has everything other modules set up for a new one (a
+    /// profile, to begin with).
     /// </summary>
     /// <remarks>
-    /// Faster than registering and verifying, and enough while no other module reacts to a new
-    /// account. Once the profile module is ported (accounts get a profile when they are created),
-    /// tests that need a complete account go through registration instead. The hash uses bcrypt cost
-    /// 4 instead of the application's 10: verification time depends on the cost stored in the
-    /// hash, and the suite creates hundreds of accounts.
+    /// The display name is the part of the address before the "@", set explicitly the way a user
+    /// would set it: tests search for and compare names, so they need predictable ones. The default
+    /// name is random (original ADR 0046) and is tested on its own, without this helper. The
+    /// recorded verification e-mail is forgotten, so the inbox of a new account starts empty.
     /// </remarks>
     public static async Task<TestUser> CreateUserAsync(this SonglyApiFactory factory, string prefix = "user", string password = DefaultPassword)
     {
-        var user = new TestUser(Guid.NewGuid(), UniqueEmail(prefix), password);
-        await factory.ExecuteSqlAsync(
-            "INSERT INTO users (id, email, password_hash, created_at) VALUES (@id, @email, @hash, now())",
-            ("id", user.Id),
-            ("email", user.Email),
-            ("hash", BCrypt.Net.BCrypt.HashPassword(password, workFactor: 4)));
-        return user;
+        var email = UniqueEmail(prefix);
+        var client = factory.CreateClient();
+        var tokens = await client.RegisterAndVerifyAsync(factory.Mails, email, password);
+        var response = await client.PutJsonAsync("/api/v1/profiles/me", new { displayName = email[..email.IndexOf('@', StringComparison.Ordinal)] }, tokens.AccessToken);
+        Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
+
+        // The verification link was setup: a test counting what reached this inbox counts what it caused.
+        factory.Mails.ClearFor(email);
+        return new TestUser(TestTokens.SubjectOf(tokens.AccessToken), email, password);
     }
 
     public static Task MakeAdminAsync(this SonglyApiFactory factory, TestUser user, bool admin = true) =>

@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Unit tests of the profile module's internals. The module's InternalsVisibleTo opens it to this
+    assembly, and only to it (ADR 0002).
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Modules\Songly.Profile\Songly.Profile.csproj" />
+  </ItemGroup>
+
+</Project>
