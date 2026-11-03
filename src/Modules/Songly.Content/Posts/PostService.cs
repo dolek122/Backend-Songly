@@ -3,6 +3,7 @@ using Songly.Common.Paging;
 using Songly.Community.Contracts;
 using Songly.Content.Domain;
 using Songly.Content.Http;
+using Songly.Content.Images;
 using Songly.Content.Persistence;
 using Songly.Social.Contracts;
 
@@ -17,6 +18,8 @@ internal sealed class PostService(
     ContentDbContext db,
     ContentVisibility visibility,
     PostViews views,
+    PostImageUploads uploads,
+    PostImageFiles files,
     ICommunityMembership communities,
     ISocialGraph socialGraph,
     TimeProvider time)
@@ -28,8 +31,8 @@ internal sealed class PostService(
     /// </summary>
     /// <remarks>
     /// An image key is accepted only from the register of uploads (original ADR 0048): a key that
-    /// was issued to this user and not attached yet. Until uploads exist, nothing is in the register,
-    /// so every key is unknown — the same answer the original gives to a key it never issued.
+    /// was issued to this user and not attached yet. Using it up and saving the post are one
+    /// transaction, so a failed save gives the upload back.
     /// </remarks>
     public async Task<PostResponse> CreateAsync(Guid authorId, CreatePostRequest request, Guid? communityId, CancellationToken cancellationToken)
     {
@@ -46,14 +49,12 @@ internal sealed class PostService(
             }
         }
 
-        if (!string.IsNullOrWhiteSpace(request.ImageKey))
-        {
-            throw new UnknownPostImageException();
-        }
-
-        var post = new Post(authorId, request.Content!, time.GetUtcNow(), communityId, imageKey: null);
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        var imageKey = await uploads.ClaimAsync(authorId, request.ImageKey, cancellationToken);
+        var post = new Post(authorId, request.Content!, time.GetUtcNow(), communityId, imageKey);
         db.Posts.Add(post);
         await db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return await views.ViewAsync(post, authorId, [], cancellationToken);
     }
 
@@ -132,7 +133,9 @@ internal sealed class PostService(
     /// The author deletes their posts anywhere; the community's owner and moderators delete any post
     /// <b>in their community</b> (original ADR 0011) — without that a community has no defence
     /// against spam. It does not spill over onto ordinary posts: there only authorship counts.
-    /// Comments, likes and shares go with the post (<c>ON DELETE CASCADE</c>).
+    /// Comments, likes and shares go with the post (<c>ON DELETE CASCADE</c>); its image goes after
+    /// the save — without that, every deleted post would leave a file nothing points to and no row
+    /// could ever lead to.
     /// </summary>
     public async Task DeleteAsync(Guid postId, Guid requesterId, CancellationToken cancellationToken)
     {
@@ -144,6 +147,10 @@ internal sealed class PostService(
 
         db.Posts.Remove(post);
         await db.SaveChangesAsync(cancellationToken);
+        if (post.ImageKey is { } imageKey)
+        {
+            await files.DeleteOrphanedAsync(imageKey, cancellationToken);
+        }
     }
 
     /// <summary>Moderation reaches posts in communities only — under an ordinary post, only authorship counts.</summary>
