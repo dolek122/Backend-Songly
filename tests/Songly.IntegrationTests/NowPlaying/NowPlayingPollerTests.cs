@@ -165,21 +165,6 @@ public sealed class NowPlayingPollerTests : IAsyncLifetime
         Assert.Equal(calls, _spotify.ApiCalls);
     }
 
-    /// <summary>Disconnecting Spotify tells watching friends "stopped listening" — unless a manual status is still playing.</summary>
-    [Fact]
-    public async Task Disconnecting_pushes_stopped()
-    {
-        var (_, subject, stream) = await WatchingAsync("poll-disconnect");
-        await using var _ = stream;
-        _spotify.Api = () => FakeSpotify.Playing("Utwór", "Artysta", "Album", "https://i.scdn.co/x");
-        await ConnectAsync(subject);
-        await stream.NextAsync();
-
-        await _client.DeleteAsync("/api/v1/now-playing/spotify", subject.Token);
-
-        Assert.Equal(JsonValueKind.Null, (await stream.NextAsync()).GetProperty("status").ValueKind);
-    }
-
     /// <summary>The heartbeat keeps a silent stream alive with comments, which clients ignore.</summary>
     [Fact]
     public async Task A_silent_stream_gets_heartbeats()

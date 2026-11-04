@@ -308,6 +308,32 @@ public sealed class SpotifyTests : IDisposable
         Assert.Equal("Ręcznie", (await (await _client.GetAsync("/api/v1/now-playing/me", manual.Token)).ReadJsonAsync()).GetProperty("title").GetString());
     }
 
+    /// <summary>
+    /// Disconnecting tells watching friends "stopped listening" — unless a manual status is still playing,
+    /// when that would be a lie. Here, in an instance without the poll: its expiry sweep would publish
+    /// "stopped" by itself a moment later, and the test would prove the sweep, not the disconnect.
+    /// </summary>
+    [Fact]
+    public async Task Disconnecting_pushes_stopped_unless_a_manual_status_remains()
+    {
+        var social = new Content.ContentTestClient(_client);
+        var viewer = await _factory.CreateLoggedInUserAsync(_client, "spotify-disconnect-viewer");
+        var plain = await ConnectAsync("spotify-disconnect-plain");
+        var manual = await ConnectAsync("spotify-disconnect-manual-stays");
+        await social.BefriendAsync(viewer, plain);
+        await social.BefriendAsync(viewer, manual);
+        await _client.PutJsonAsync("/api/v1/now-playing/manual", new { title = "Ręcznie" }, manual.Token);
+        await using var stream = await LiveStream.OpenAsync(_client, viewer);
+
+        await _client.DeleteAsync("/api/v1/now-playing/spotify", manual.Token);
+        await _client.DeleteAsync("/api/v1/now-playing/spotify", plain.Token);
+
+        var push = await stream.NextAsync();
+        Assert.Equal(plain.Id, push.GetProperty("userId").GetGuid());
+        Assert.Equal(JsonValueKind.Null, push.GetProperty("status").ValueKind);
+        Assert.True(await stream.NothingWithinAsync(TimeSpan.FromSeconds(2)));
+    }
+
     [Fact]
     public async Task Deleting_the_account_removes_the_link()
     {
