@@ -86,8 +86,9 @@ The repo uses Microsoft.Testing.Platform (`global.json`). Filter with
   failure must never change the HTTP response.
 - Lists are paged with `PageQuery` (Spring's bounds: nothing rejected, size 20 by default, at
   most 100) and return `PagedResponse<T>` via `ToPageAsync` on an **ordered** query with the
-  filters inside it (ADR 0009). A required set of ids from the query string goes through
-  `RequiredGuidSet` (`?ids=a&ids=b` and `?ids=a,b` alike — the mobile app sends the latter).
+  filters inside it (ADR 0009). A list only code can order (matching ranks by a computed score) is
+  cut in memory and wrapped with `PagingExtensions.Page`. A required set of ids from the query
+  string goes through `RequiredGuidSet` (`?ids=a&ids=b` and `?ids=a,b` alike — the mobile app sends the latter).
 - Files go to `IObjectStorage`; keys are stored, never URLs (`PublicUrl(key)` builds the address).
   Uploaded images go through `SanitizedImage.From` first — format from content, metadata removed
   (ADR 0010). Upload the new file before the save, delete the old one after it.

@@ -30,6 +30,11 @@ public static class PagingExtensions
     /// <summary>An empty page that still says which page was asked for.</summary>
     public static PagedResponse<T> Empty<T>(PageQuery page) => Page<T>([], page, total: 0);
 
-    private static PagedResponse<T> Page<T>(IReadOnlyList<T> content, PageQuery page, long total) =>
+    /// <summary>
+    /// A page of a list ranked in memory, where no query can order it (matching ranks by a score
+    /// computed in code): the caller has cut <paramref name="content"/> out of <paramref name="total"/>
+    /// rows itself.
+    /// </summary>
+    public static PagedResponse<T> Page<T>(IReadOnlyList<T> content, PageQuery page, long total) =>
         new(content, new PageMetadata(page.Size, page.Page, total, (int)Math.Ceiling(total / (double)page.Size)));
 }

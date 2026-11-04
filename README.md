@@ -23,7 +23,7 @@ does; this repository documents *how* it is done in .NET ([ADR 0001](docs/adr/00
 | Social | Friend requests (mutual ones become a friendship), friends, blocking that ends the relation, block state for the profile screen, the graph other modules read friends and blocks from | ✅ |
 | Content | Posts, likes, comments, shares, the feed, posts in communities with moderation of posts and comments, content of blocked and suspended authors hidden on every path, post images through a register of uploads (stripped of metadata, abandoned ones cleaned up), reports to community moderation with a per-reporter limit that depends on their track record | ✅ |
 | NowPlaying | Own status, the manual fallback for services without an API, friends' statuses from Redis, visibility setting, suspended accounts left out, Spotify through OAuth (callback back to the app, tokens encrypted with AES-GCM, revoked consent drops the link), the friends' statuses live (SSE through a Redis channel), a server-side poll of the watched users with a shared backoff | ✅ |
-| Matching | Genre-based matching | — |
+| Matching | Genre-based matching: a weighted Jaccard (a shared rare genre counts for more), damped by how much both profiles tell, with the confidence next to the score; friends, blocked and suspended users left out | ✅ |
 | Community | Communities, membership, roles (moderators named by the owner), bans (temporary or permanent), appeals to the moderators and escalation to the administration, the membership contract for content | ✅ |
 | Notification | Inbox, e-mail, push | — |
 | Analytics | PII-free event counters | — |
