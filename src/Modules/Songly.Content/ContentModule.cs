@@ -9,11 +9,12 @@ using Songly.Content.Http;
 using Songly.Content.Images;
 using Songly.Content.Persistence;
 using Songly.Content.Posts;
+using Songly.Content.Reports;
 using Songly.Identity.Contracts;
 
 namespace Songly.Content;
 
-/// <summary>Posts, likes, comments, shares and the feed.</summary>
+/// <summary>Posts, likes, comments, shares, the feed, post images and reports to community moderation.</summary>
 public sealed class ContentModule : IModule
 {
     public void Register(IServiceCollection services, IConfiguration configuration)
@@ -30,6 +31,17 @@ public sealed class ContentModule : IModule
         services.AddScoped<PostImageFiles>();
         services.AddScoped<PostImageUploads>();
         services.AddHostedService<AbandonedPostImageCleanupJob>();
+        services.AddOptions<ReportOptions>()
+            .Bind(configuration.GetSection(ReportOptions.Section))
+            // A floor of zero would let a few dismissals take away for good the tool one could report
+            // a moderator's own abuse with.
+            .Validate(
+                o => o.MinLimit >= 1 && o.Limit >= o.MinLimit && o.DismissalPenalty >= 0 && o.Window > TimeSpan.Zero && o.HistoryWindow > TimeSpan.Zero,
+                $"{ReportOptions.Section}: MinLimit must be at least 1 and at most Limit, DismissalPenalty must not be negative, the windows must be positive")
+            .ValidateOnStart();
+        services.AddSingleton<ModerationMetrics>();
+        services.AddScoped<ReporterHistory>();
+        services.AddScoped<ReportService>();
         services.AddScoped<ContentVisibility>();
         services.AddScoped<PostViews>();
         services.AddScoped<PostService>();

@@ -5,6 +5,7 @@ using Songly.Content.Domain;
 using Songly.Content.Http;
 using Songly.Content.Images;
 using Songly.Content.Persistence;
+using Songly.Content.Reports;
 using Songly.Social.Contracts;
 
 namespace Songly.Content.Posts;
@@ -12,7 +13,7 @@ namespace Songly.Content.Posts;
 /// <summary>Publishing, reading and deleting posts, and the feed.</summary>
 /// <remarks>
 /// The original publishes <c>CommunityPostRemovedEvent</c> when a moderator deletes someone else's
-/// post, with the reporters of that post; it arrives with the reports and the notification module.
+/// post, with the reporters of that post; it arrives with the notification and moderation-log modules.
 /// </remarks>
 internal sealed class PostService(
     ContentDbContext db,
@@ -20,6 +21,7 @@ internal sealed class PostService(
     PostViews views,
     PostImageUploads uploads,
     PostImageFiles files,
+    ReporterHistory reporterHistory,
     ICommunityMembership communities,
     ISocialGraph socialGraph,
     TimeProvider time)
@@ -145,6 +147,19 @@ internal sealed class PostService(
             throw new NotResourceOwnerException();
         }
 
+        // Deleted by moderation (not by its author — that decides nobody's report): every report of the
+        // post turns out to be right (original ADR 0027). The reporters are read before the delete —
+        // the cascade takes the reports along, and afterwards there is nothing to read.
+        if (post.AuthorId != requesterId && post.CommunityId is { } communityId)
+        {
+            var reporterIds = await db.PostReports.Where(r => r.PostId == postId).Select(r => r.ReporterId).Distinct().ToListAsync(cancellationToken);
+            foreach (var reporterId in reporterIds)
+            {
+                reporterHistory.Record(reporterId, communityId, Domain.ReporterDecisionOutcome.Upheld);
+            }
+        }
+
+        // One save: the decisions and the deletion commit together.
         db.Posts.Remove(post);
         await db.SaveChangesAsync(cancellationToken);
         if (post.ImageKey is { } imageKey)

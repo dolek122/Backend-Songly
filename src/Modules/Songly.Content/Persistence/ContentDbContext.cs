@@ -1,12 +1,14 @@
 using Microsoft.EntityFrameworkCore;
+using Songly.Common.Persistence;
 using Songly.Content.Domain;
 
 namespace Songly.Content.Persistence;
 
-/// <summary>The content module's tables: <c>posts</c>, <c>comments</c>, <c>likes</c>, <c>shares</c>, <c>post_image_uploads</c>.</summary>
+/// <summary>The content module's tables: <c>posts</c>, <c>comments</c>, <c>likes</c>, <c>shares</c>, <c>post_image_uploads</c>,
+/// <c>post_reports</c>, <c>reporter_decisions</c>.</summary>
 /// <remarks>
 /// Comments, likes and shares reference the post with <c>ON DELETE CASCADE</c> — within this
-/// module, so deleting a post takes everyone's activity under it. <c>posts.community_id</c> has no
+/// module, so deleting a post takes everyone's activity under it, and its reports. <c>posts.community_id</c> has no
 /// cascade: that reference crosses into the community module, which tells content through
 /// <c>CommunityDeleted</c> instead.
 /// </remarks>
@@ -21,6 +23,10 @@ internal sealed class ContentDbContext(DbContextOptions<ContentDbContext> option
     public DbSet<Share> Shares => Set<Share>();
 
     public DbSet<PostImageUpload> PostImageUploads => Set<PostImageUpload>();
+
+    public DbSet<PostReport> PostReports => Set<PostReport>();
+
+    public DbSet<ReporterDecision> ReporterDecisions => Set<ReporterDecision>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -52,6 +58,21 @@ internal sealed class ContentDbContext(DbContextOptions<ContentDbContext> option
         {
             upload.ToTable("post_image_uploads");
             upload.HasKey(u => u.ImageKey);
+        });
+
+        modelBuilder.Entity<PostReport>(report =>
+        {
+            report.ToTable("post_reports");
+            report.HasKey(r => r.Id);
+            report.Property(r => r.Reason).HasConversion(new EnumNameConverter<ReportReason>());
+            report.Property(r => r.Status).HasConversion(new EnumNameConverter<ReportStatus>());
+        });
+
+        modelBuilder.Entity<ReporterDecision>(decision =>
+        {
+            decision.ToTable("reporter_decisions");
+            decision.HasKey(d => d.Id);
+            decision.Property(d => d.Outcome).HasConversion(new EnumNameConverter<ReporterDecisionOutcome>());
         });
     }
 }
