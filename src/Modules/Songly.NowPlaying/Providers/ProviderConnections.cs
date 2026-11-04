@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Songly.NowPlaying.Persistence;
 using Songly.NowPlaying.Status;
+using Songly.NowPlaying.Stream;
 using StackExchange.Redis;
 
 namespace Songly.NowPlaying.Providers;
@@ -18,6 +19,7 @@ internal sealed class ProviderConnections(
     IMusicProvider provider,
     NowPlayingDbContext db,
     StatusStore statuses,
+    StatusPublisher publisher,
     IOptions<NowPlayingOptions> options)
 {
     private const string StateKeyPrefix = "now-playing:oauth-state:";
@@ -43,11 +45,18 @@ internal sealed class ProviderConnections(
     /// <summary>The provider came back without a code (consent refused, or its error). The state is used up at once, so it cannot be put into the callback again for the rest of its lifetime.</summary>
     public Task AbandonAsync(string state) => redis.GetDatabase().KeyDeleteAsync(StateKeyPrefix + state);
 
-    /// <summary>Idempotent. A manual status stays — it does not depend on the provider.</summary>
+    /// <summary>
+    /// Idempotent. A manual status stays — it does not depend on the provider — and while it does, the
+    /// user still "plays" something, so "stopped listening" would be a lie.
+    /// </summary>
     public async Task DisconnectAsync(Guid userId, CancellationToken cancellationToken)
     {
         await db.Links.Where(l => l.UserId == userId && l.Provider == provider.Name).ExecuteDeleteAsync(cancellationToken);
         await statuses.ForgetProviderAsync(userId);
+        if (await statuses.ManualAsync(userId) is null)
+        {
+            await publisher.PublishStoppedAsync(userId);
+        }
     }
 
     private static string Base64UrlEncode(byte[] bytes) =>

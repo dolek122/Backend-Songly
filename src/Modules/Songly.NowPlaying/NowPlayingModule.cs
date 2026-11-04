@@ -10,6 +10,7 @@ using Songly.NowPlaying.Http;
 using Songly.NowPlaying.Persistence;
 using Songly.NowPlaying.Providers;
 using Songly.NowPlaying.Status;
+using Songly.NowPlaying.Stream;
 
 namespace Songly.NowPlaying;
 
@@ -33,6 +34,20 @@ public sealed class NowPlayingModule : IModule
         services.AddScoped<SpotifyClient>();
         services.AddScoped<IMusicProvider, SpotifyProvider>();
         services.AddScoped<ProviderConnections>();
+        services.AddOptions<StreamOptions>()
+            .Bind(configuration.GetSection(StreamOptions.Section))
+            .Validate(o => o.Timeout > TimeSpan.Zero && o.MaxPerUser > 0 && o.HeartbeatInterval > TimeSpan.Zero && o.AnnouncedTtl > TimeSpan.Zero, $"{StreamOptions.Section}: Timeout, MaxPerUser, HeartbeatInterval and AnnouncedTtl must be positive")
+            .ValidateOnStart();
+        services.AddOptions<PollOptions>()
+            .Bind(configuration.GetSection(PollOptions.Section))
+            .Validate(o => o.Interval > TimeSpan.Zero && o.LockTtl > TimeSpan.Zero && o.ProviderBackoff > TimeSpan.Zero, $"{PollOptions.Section}: Interval, LockTtl and ProviderBackoff must be positive")
+            .ValidateOnStart();
+        services.AddSingleton<StreamHub>();
+        services.AddSingleton<StatusPublisher>();
+        services.AddScoped<StreamBroadcaster>();
+        services.AddHostedService<StatusSubscriber>();
+        services.AddHostedService<StreamHeartbeat>();
+        services.AddHostedService<NowPlayingPoller>();
         services.AddSingleton<StatusStore>();
         services.AddScoped<NowPlayingService>();
         services.AddScoped<IDomainEventHandler<UserAccountDeletionRequested>, DeleteNowPlayingDataOnAccountDeletion>();

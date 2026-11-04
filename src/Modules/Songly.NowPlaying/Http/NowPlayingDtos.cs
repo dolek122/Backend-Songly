@@ -40,5 +40,9 @@ internal sealed record NowPlayingStatusResponse(
     bool Playing,
     DateTimeOffset FetchedAt);
 
-/// <summary>A friend's status with their display data, so the client does not have to fetch the profile separately.</summary>
-internal sealed record FriendNowPlayingResponse(Guid UserId, string? DisplayName, string? AvatarUrl, NowPlayingStatusResponse Status);
+/// <summary>
+/// A friend's status with their display data, so the client does not have to fetch the profile
+/// separately. On the live stream <c>status</c> <c>null</c> means "stopped listening" — remove the friend
+/// from the list of those playing; on <c>GET /friends</c> it is never null.
+/// </summary>
+internal sealed record FriendNowPlayingResponse(Guid UserId, string? DisplayName, string? AvatarUrl, NowPlayingStatusResponse? Status);

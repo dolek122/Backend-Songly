@@ -129,11 +129,17 @@ public sealed class SonglyApiFactory : WebApplicationFactory<Program>, IAsyncLif
         builder.UseSetting("Songly:Storage:SecretKey", _minio.GetSecretKey());
         builder.UseSetting("Songly:Storage:PublicBaseUrl", StoragePublicBaseUrl);
 
+        // Warnings and up only: at Information every SQL statement of hundreds of parallel tests lands on
+        // the console, and the one failing test's message drowns in it — CI's log tail shows only noise.
+        builder.UseSetting("Serilog:MinimumLevel:Default", "Warning");
+
         // Off here: they run at startup and would race tests that insert expired rows on purpose.
         // The tests of the jobs themselves turn them on in an instance of their own.
         builder.UseSetting("Songly:Security:Registration:CleanupEnabled", "false");
         builder.UseSetting("Songly:Security:SessionCleanup:Enabled", "false");
         builder.UseSetting("Songly:Content:PostImage:CleanupEnabled", "false");
+        builder.UseSetting("Songly:NowPlaying:Poll:Enabled", "false");
+        builder.UseSetting("Songly:NowPlaying:Stream:HeartbeatEnabled", "false");
         builder.ConfigureTestServices(services =>
         {
             services.AddSingleton<IModule, ProbeModule>();

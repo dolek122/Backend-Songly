@@ -29,12 +29,15 @@ internal sealed class FakeSpotify
     public int ApiCalls => Requests.Count(r => r.Path.StartsWith("/v1", StringComparison.Ordinal));
 
     /// <summary>A second instance of the app on the shared database and Redis, talking to this fake.</summary>
-    public WebApplicationFactory<Program> Attach(SonglyApiFactory factory) =>
+    public WebApplicationFactory<Program> Attach(SonglyApiFactory factory, params (string Key, string? Value)[] settings) =>
         factory.WithSettings(
+        [
             ("Songly:NowPlaying:Spotify:TokenUrl", "https://spotify.test/api/token"),
             ("Songly:NowPlaying:Spotify:ApiBaseUrl", "https://spotify.test/v1"),
             ("Songly:NowPlaying:Spotify:ClientId", "client-id"),
-            ("Songly:NowPlaying:Spotify:ClientSecret", "client-secret"))
+            ("Songly:NowPlaying:Spotify:ClientSecret", "client-secret"),
+            .. settings,
+        ])
         .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
             services.AddHttpClient("Spotify").ConfigurePrimaryHttpMessageHandler(() => new Handler(this))));
 

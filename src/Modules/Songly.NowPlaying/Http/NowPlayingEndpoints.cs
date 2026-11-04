@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.WebUtilities;
@@ -8,6 +9,8 @@ using Microsoft.Extensions.Options;
 using Songly.Common.Web;
 using Songly.NowPlaying.Providers;
 using Songly.NowPlaying.Status;
+using Songly.NowPlaying.Stream;
+using Songly.Social.Contracts;
 
 namespace Songly.NowPlaying.Http;
 
@@ -58,6 +61,44 @@ internal static class NowPlayingEndpoints
         {
             await connections.DisconnectAsync(user.GetUserId(), cancellationToken);
             return TypedResults.NoContent();
+        });
+
+        // The friends' statuses live (original ADR 0007): one connection, an event "now-playing" with a
+        // FriendNowPlayingResponse whenever a friend's status changes — "status": null means they stopped
+        // listening. The initial state comes from GET /friends. A comment every few seconds keeps the
+        // connection alive; its absence for longer is the client's signal to reconnect. The response is
+        // written by hand rather than as .NET's SSE result, which cannot send comments.
+        nowPlaying.MapGet("/stream", async Task (HttpContext http, StreamHub hub, ISocialGraph socialGraph, IOptions<StreamOptions> options) =>
+        {
+            var userId = http.User.GetUserId();
+
+            // Registered before the response starts, so that the limit is an ordinary 429 with a JSON body.
+            var connection = hub.Register(userId, await socialGraph.FriendIdsAsync(userId, http.RequestAborted));
+            try
+            {
+                http.Response.ContentType = "text/event-stream";
+                http.Response.Headers.CacheControl = "no-cache";
+                http.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
+                await http.Response.Body.FlushAsync(http.RequestAborted);
+
+                // The stream ends after its timeout; the client reconnects, and a stream nobody reads
+                // does not live for ever.
+                using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(http.RequestAborted);
+                lifetime.CancelAfter(options.Value.Timeout);
+                await foreach (var frame in connection.Frames.ReadAllAsync(lifetime.Token))
+                {
+                    await http.Response.WriteAsync(frame, lifetime.Token);
+                    await http.Response.Body.FlushAsync(lifetime.Token);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // The client went away, or the stream's time ran out.
+            }
+            finally
+            {
+                hub.Unregister(userId, connection);
+            }
         });
 
         nowPlaying.MapGet("/friends", (ClaimsPrincipal user, NowPlayingService service, CancellationToken cancellationToken) =>
