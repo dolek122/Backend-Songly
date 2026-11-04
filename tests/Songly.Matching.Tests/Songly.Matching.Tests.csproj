@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Unit tests of the matching module's internals (ADR 0002). -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Modules\Songly.Matching\Songly.Matching.csproj" />
+  </ItemGroup>
+
+</Project>

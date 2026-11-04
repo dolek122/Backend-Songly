@@ -1,2 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <!--
+      Contracts only: identity for suspended accounts, profile for genres, names and avatars, social
+      for friends and blocks. Matching keeps no data of its own.
+    -->
+    <ProjectReference Include="..\Songly.Identity\Songly.Identity.csproj" />
+    <ProjectReference Include="..\Songly.Profile\Songly.Profile.csproj" />
+    <ProjectReference Include="..\Songly.Social\Songly.Social.csproj" />
+  </ItemGroup>
+
 </Project>
