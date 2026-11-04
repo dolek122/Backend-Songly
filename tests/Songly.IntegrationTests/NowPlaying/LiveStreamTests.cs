@@ -174,9 +174,7 @@ public sealed class LiveStreamTests(SonglyApiFactory factory)
         await using var second = await LiveStream.OpenAsync(_client, viewer);
         await using var third = await LiveStream.OpenAsync(_client, viewer);
 
-        var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/now-playing/stream");
-        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", viewer.Token);
-        using var fourth = await _client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, TestContext.Current.CancellationToken);
+        using var fourth = await OpenRawAsync(viewer);
         await fourth.ReadErrorAsync(HttpStatusCode.TooManyRequests, "TOO_MANY_STREAMS");
 
         await SetManualAsync(friend, "Utwór");
@@ -184,21 +182,28 @@ public sealed class LiveStreamTests(SonglyApiFactory factory)
         await third.NextAsync();
     }
 
-    /// <summary>A closed stream frees its place.</summary>
+    /// <summary>
+    /// A closed stream frees its place. The server learns of the close asynchronously — the client is
+    /// gone before the request's cancellation reaches the endpoint — so the place is free <b>soon</b>, not
+    /// at the instant the client hangs up: the test waits for it instead of assuming it.
+    /// </summary>
     [Fact]
     public async Task A_closed_stream_frees_its_place()
     {
         var viewer = await factory.CreateLoggedInUserAsync(_client, "stream-free");
-        for (var i = 0; i < 5; i++)
+        await using var first = await LiveStream.OpenAsync(_client, viewer);
+        await using var second = await LiveStream.OpenAsync(_client, viewer);
+        var third = await LiveStream.OpenAsync(_client, viewer);
+        using (var refused = await OpenRawAsync(viewer))
         {
-            await using var stream = await LiveStream.OpenAsync(_client, viewer);
+            Assert.Equal(HttpStatusCode.TooManyRequests, refused.StatusCode);
         }
+
+        await third.DisposeAsync();
 
         await WaitUntilAsync(async () =>
         {
-            var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/now-playing/stream");
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", viewer.Token);
-            using var response = await _client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, TestContext.Current.CancellationToken);
+            using var response = await OpenRawAsync(viewer);
             return response.StatusCode == HttpStatusCode.OK;
         });
     }
@@ -215,6 +220,14 @@ public sealed class LiveStreamTests(SonglyApiFactory factory)
         var friend = await factory.CreateLoggedInUserAsync(_client, $"{prefix}-friend");
         await _social.BefriendAsync(viewer, friend);
         return (viewer, friend, await LiveStream.OpenAsync(_client, viewer));
+    }
+
+    /// <summary>A stream request whose answer the test inspects itself — <see cref="LiveStream.OpenAsync"/> insists on 200.</summary>
+    private async Task<HttpResponseMessage> OpenRawAsync(LoggedInUser user)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/now-playing/stream");
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", user.Token);
+        return await _client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, TestContext.Current.CancellationToken);
     }
 
     /// <summary>The message as any instance sends it on the channel — the contract between instances.</summary>

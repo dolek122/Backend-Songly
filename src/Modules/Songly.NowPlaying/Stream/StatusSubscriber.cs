@@ -36,9 +36,20 @@ internal sealed partial class StatusSubscriber(IConnectionMultiplexer redis, ISe
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        if (_queue is not null)
+        if (_queue is null)
+        {
+            return;
+        }
+
+        try
         {
             await _queue.UnsubscribeAsync();
+        }
+        catch (Exception exception) when (exception is RedisException or TimeoutException or ObjectDisposedException)
+        {
+            // Leaving the channel is a courtesy: with the connection gone there is no subscription left
+            // to leave. Throwing here would fail the whole host's stop — a deploy during a Redis outage.
+            LogUnsubscribeFailed(exception);
         }
     }
 
@@ -58,6 +69,9 @@ internal sealed partial class StatusSubscriber(IConnectionMultiplexer redis, ISe
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Could not subscribe to the now-playing channel; live streams get no pushes")]
     private partial void LogSubscriptionFailed(Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Could not leave the now-playing channel at shutdown")]
+    private partial void LogUnsubscribeFailed(Exception exception);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Dropped a now-playing change that could not be delivered")]
     private partial void LogMessageDropped(Exception exception);
