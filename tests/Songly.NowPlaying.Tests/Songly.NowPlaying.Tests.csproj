@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Unit tests of the now-playing module's internals (ADR 0002). -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Modules\Songly.NowPlaying\Songly.NowPlaying.csproj" />
+  </ItemGroup>
+
+</Project>

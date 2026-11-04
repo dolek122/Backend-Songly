@@ -83,5 +83,7 @@ public sealed class AccessTokenTests(SonglyApiFactory factory)
         factory.WithWebHostBuilder(builder => builder
             .UseSetting("Songly:Security:Jwt:Secret", secret)
             .UseSetting("Songly:Security:ProductionSecretsRequired", productionSecretsRequired.ToString())
+            // A real token key too: the test is about the JWT secret, and the development token key would refuse to start on its own.
+            .UseSetting("Songly:NowPlaying:TokenEncryptionKey", "Gm7cWq3vR9tX1yLp5Bn8Kd2Hf6Js4Ze0Ua3Oi7Ve9Qw=")
             .UseSetting("Database:MigrateOnStartup", "false"));
 }

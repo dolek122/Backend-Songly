@@ -22,6 +22,7 @@ internal sealed class DeleteNowPlayingDataOnAccountDeletion(NowPlayingDbContext 
     {
         var userId = domainEvent.UserId;
         await db.Preferences.Where(p => p.UserId == userId).ExecuteDeleteAsync(cancellationToken);
+        await db.Links.Where(l => l.UserId == userId).ExecuteDeleteAsync(cancellationToken);
         afterCommit.Defer(_ => statuses.ForgetAsync(userId));
     }
 }

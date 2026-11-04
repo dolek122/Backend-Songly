@@ -22,7 +22,7 @@ does; this repository documents *how* it is done in .NET ([ADR 0001](docs/adr/00
 | Profile | Profiles created with the account, favourite genres, user search, public profiles hidden for suspended accounts, names for the administration, avatars stripped of metadata, genre popularity cached in Redis, the directory other modules read names and genres from | ✅ |
 | Social | Friend requests (mutual ones become a friendship), friends, blocking that ends the relation, block state for the profile screen, the graph other modules read friends and blocks from | ✅ |
 | Content | Posts, likes, comments, shares, the feed, posts in communities with moderation of posts and comments, content of blocked and suspended authors hidden on every path, post images through a register of uploads (stripped of metadata, abandoned ones cleaned up), reports to community moderation with a per-reporter limit that depends on their track record | ✅ |
-| NowPlaying | Own status, the manual fallback for services without an API, friends' statuses from Redis, visibility setting, suspended accounts left out | 🚧 Spotify and the live stream next |
+| NowPlaying | Own status, the manual fallback for services without an API, friends' statuses from Redis, visibility setting, suspended accounts left out, Spotify through OAuth (callback back to the app, tokens encrypted with AES-GCM, revoked consent drops the link) | 🚧 the live stream and the poll next |
 | Matching | Genre-based matching | — |
 | Community | Communities, membership, roles (moderators named by the owner), bans (temporary or permanent), appeals to the moderators and escalation to the administration, the membership contract for content | ✅ |
 | Notification | Inbox, e-mail, push | — |

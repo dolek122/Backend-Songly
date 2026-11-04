@@ -82,6 +82,7 @@ public sealed class LocalDevAccountsTests(SonglyApiFactory factory)
             ("Songly:LocalDevAccounts:Enabled", "true"),
             ("Songly:Security:ProductionSecretsRequired", "true"),
             ("Songly:Security:Jwt:Secret", "Zq8v3Nf0a7LwXy2Pk5Rt9Bc4Hd6Jm1Qs8Vu0Ge3Ti7Ko"),
+            ("Songly:NowPlaying:TokenEncryptionKey", "Gm7cWq3vR9tX1yLp5Bn8Kd2Hf6Js4Ze0Ua3Oi7Ve9Qw="),
         ]);
 
         Assert.ThrowsAny<Exception>(() => app.CreateClient());
