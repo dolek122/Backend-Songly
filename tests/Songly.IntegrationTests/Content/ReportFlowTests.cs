@@ -257,6 +257,10 @@ public sealed class ReportFlowTests(SonglyApiFactory factory)
         var pendingPost = await _reports.Content.PublishedInAsync(author, communityId, "czeka");
         var other = await factory.CreateLoggedInUserAsync(_client, "rep-account-other");
         await _reports.ReportedAsync(other, pendingPost);
+        var keeper = await factory.CreateLoggedInUserAsync(_client, "rep-account-keeper");
+        var spam = await _reports.Content.PublishedInAsync(author, communityId, "spam");
+        await _reports.ReportedAsync(keeper, spam);
+        await _reports.RemovedAsync(owner, spam);
 
         Assert.Equal(HttpStatusCode.NoContent, (await _reports.Communities.DeleteAccountAsync(moderator)).StatusCode);
         Assert.Equal(1L, await factory.QuerySingleAsync<long>("SELECT count(*) FROM post_reports WHERE post_id = @post AND status = 'DISMISSED' AND reviewed_by IS NULL", ("post", dismissedPost)));
@@ -264,9 +268,15 @@ public sealed class ReportFlowTests(SonglyApiFactory factory)
         Assert.Equal(HttpStatusCode.NoContent, (await _reports.Communities.DeleteAccountAsync(other)).StatusCode);
         Assert.Equal(0, (await _reports.QueueAsync(owner, communityId)).GetArrayLength());
 
+        // A reporter with a track record leaves while the community still exists: their decisions go with them.
+        Assert.Equal(1, await _reports.DecisionsAsync(reporter, "DISMISSED"));
+        Assert.Equal(HttpStatusCode.NoContent, (await _reports.Communities.DeleteAccountAsync(reporter)).StatusCode);
+        Assert.Equal(0, await _reports.DecisionsAsync(reporter, "DISMISSED"));
+
+        // The decisions still left in the community (the keeper's) go with the community.
         Assert.Equal(HttpStatusCode.NoContent, (await _client.DeleteAsync($"/api/v1/communities/{communityId}", owner.Token)).StatusCode);
         Assert.Equal(0L, await factory.QuerySingleAsync<long>("SELECT count(*) FROM reporter_decisions WHERE community_id = @id", ("id", communityId)));
-        Assert.Equal(HttpStatusCode.NoContent, (await _reports.Communities.DeleteAccountAsync(reporter)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await _reports.Communities.DeleteAccountAsync(keeper)).StatusCode);
     }
 
     [Fact]
