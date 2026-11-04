@@ -134,6 +134,8 @@ public sealed class SonglyApiFactory : WebApplicationFactory<Program>, IAsyncLif
         builder.UseSetting("Songly:Security:Registration:CleanupEnabled", "false");
         builder.UseSetting("Songly:Security:SessionCleanup:Enabled", "false");
         builder.UseSetting("Songly:Content:PostImage:CleanupEnabled", "false");
+        builder.UseSetting("Songly:NowPlaying:Poll:Enabled", "false");
+        builder.UseSetting("Songly:NowPlaying:Stream:HeartbeatEnabled", "false");
         builder.ConfigureTestServices(services =>
         {
             services.AddSingleton<IModule, ProbeModule>();

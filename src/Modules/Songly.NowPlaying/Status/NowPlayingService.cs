@@ -4,6 +4,7 @@ using Songly.NowPlaying.Domain;
 using Songly.NowPlaying.Http;
 using Songly.NowPlaying.Persistence;
 using Songly.NowPlaying.Providers;
+using Songly.NowPlaying.Stream;
 using Songly.Profile.Contracts;
 using Songly.Social.Contracts;
 
@@ -11,8 +12,9 @@ namespace Songly.NowPlaying.Status;
 
 /// <summary>A user's own status, the manual fallback, the friends' statuses and the visibility setting.</summary>
 /// <remarks>
-/// The original also pushes every change to the friends' live streams (original ADR 0007); that
-/// arrives with the stream.
+/// Every change of what friends may see is published to their live streams (<see cref="StatusPublisher"/>,
+/// original ADR 0007) — including the ones that make a status disappear, which a friend with an open
+/// stream would otherwise never learn about.
 /// </remarks>
 internal sealed class NowPlayingService(
     NowPlayingDbContext db,
@@ -21,6 +23,7 @@ internal sealed class NowPlayingService(
     ISocialGraph socialGraph,
     IProfileDirectory profiles,
     ISuspendedAccounts suspendedAccounts,
+    StatusPublisher publisher,
     TimeProvider time)
 {
     private const string DefaultManualSource = "manual";
@@ -74,13 +77,79 @@ internal sealed class NowPlayingService(
     /// deliberately over unofficial, reverse-engineered ones, which break the provider's terms and can
     /// vanish overnight. It takes precedence over the provider until it expires or is cleared.
     /// </summary>
-    public Task SetManualAsync(Guid userId, ManualNowPlayingRequest request)
+    public async Task SetManualAsync(Guid userId, ManualNowPlayingRequest request)
     {
         var source = string.IsNullOrWhiteSpace(request.Source) ? DefaultManualSource : request.Source;
-        return statuses.SetManualAsync(userId, new StoredStatus(source, request.Title, request.Artist, request.Album, ImageUrl: null, Playing: true, time.GetUtcNow()));
+        var status = new StoredStatus(source, request.Title, request.Artist, request.Album, ImageUrl: null, Playing: true, time.GetUtcNow());
+        await statuses.SetManualAsync(userId, status);
+        await publisher.PublishAsync(userId, status);
     }
 
-    public Task ClearManualAsync(Guid userId) => statuses.ClearManualAsync(userId);
+    /// <summary>
+    /// When a fresh provider status is underneath, it becomes the current one and friends see it at the
+    /// next change of track; "stopped listening" goes out only when nothing is left to show.
+    /// </summary>
+    public async Task ClearManualAsync(Guid userId)
+    {
+        await statuses.ClearManualAsync(userId);
+        if ((await statuses.ProviderAsync(userId)).Status is null)
+        {
+            await publisher.PublishStoppedAsync(userId);
+        }
+    }
+
+    /// <summary>
+    /// The server-side poll's refresh: asks the provider <b>past</b> the cache — the poll fills the cache,
+    /// it does not read from it — and publishes only a real change of track, or the end of playback.
+    /// Without that, every run of the poll would push the same status to every stream.
+    /// </summary>
+    /// <remarks>Users with a manual status are skipped: it takes precedence, so asking Spotify would change nothing friends see.</remarks>
+    public async Task RefreshFromProviderAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        if (await statuses.ManualAsync(userId) is not null)
+        {
+            return;
+        }
+
+        var previous = (await statuses.ProviderAsync(userId)).Status;
+        var fresh = await FetchAndCacheAsync(userId, cancellationToken);
+        if (fresh is null)
+        {
+            if (previous is not null)
+            {
+                await publisher.PublishStoppedAsync(userId);
+            }
+        }
+        else if (IsDifferentTrack(previous, fresh))
+        {
+            await publisher.PublishAsync(userId, fresh);
+        }
+    }
+
+    /// <summary>
+    /// Of the given users, those the poll may ask the provider about: a link, and sharing on — whoever
+    /// hid their status would not have it leave the server anyway, so there is neither point nor right to
+    /// ask. One query for the whole batch: the poll runs every half minute over all observed users, and
+    /// most of them have no integration.
+    /// </summary>
+    public async Task<IReadOnlyList<Guid>> PollableAsync(IReadOnlyCollection<Guid> candidates, CancellationToken cancellationToken)
+    {
+        if (candidates.Count == 0)
+        {
+            return [];
+        }
+
+        var linked = await db.Links.Where(l => l.Provider == provider.Name && candidates.Contains(l.UserId)).Select(l => l.UserId).ToListAsync(cancellationToken);
+        return await SharingAsync(linked, cancellationToken);
+    }
+
+    /// <summary>By the track only — <c>fetchedAt</c> changes on every read, so comparing whole records would make every poll a change.</summary>
+    private static bool IsDifferentTrack(StoredStatus? previous, StoredStatus fresh) =>
+        previous is null
+        || previous.Title != fresh.Title
+        || previous.Artist != fresh.Artist
+        || previous.Album != fresh.Album
+        || previous.Playing != fresh.Playing;
 
     /// <summary>
     /// What friends are playing — <b>from the cache only</b>, never by asking the provider per friend:
@@ -110,7 +179,7 @@ internal sealed class NowPlayingService(
     public async Task<NowPlayingSettingsResponse> SettingsAsync(Guid userId, CancellationToken cancellationToken) =>
         new(!await db.Preferences.AnyAsync(p => p.UserId == userId && !p.ShareWithFriends, cancellationToken));
 
-    /// <summary>The cached status is not deleted when sharing goes off: it is filtered on every way out, and the owner still sees it.</summary>
+    /// <summary>The stored status is not deleted when sharing goes off: it is filtered on every way out, and the owner still sees it.</summary>
     public async Task UpdateSettingsAsync(Guid userId, bool shareWithFriends, CancellationToken cancellationToken)
     {
         var now = time.GetUtcNow();
@@ -125,6 +194,18 @@ internal sealed class NowPlayingService(
         }
 
         await db.SaveChangesAsync(cancellationToken);
+
+        // The flag alone is not enough: a friend with an open stream gets no push any more, so they would
+        // see the last status for ever. Off sends "stopped listening"; on sends the current status, so it
+        // is back on the list at once, not at the next change of track.
+        if (!shareWithFriends)
+        {
+            await publisher.PublishStoppedAsync(userId);
+        }
+        else if (await statuses.CurrentAsync(userId) is { } current)
+        {
+            await publisher.PublishAsync(userId, current);
+        }
     }
 
     /// <summary>
@@ -151,6 +232,6 @@ internal sealed class NowPlayingService(
         return candidates.Where(id => !optedOut.Contains(id) && !suspended.Contains(id)).ToList();
     }
 
-    private static NowPlayingStatusResponse ToResponse(StoredStatus status) =>
+    public static NowPlayingStatusResponse ToResponse(StoredStatus status) =>
         new(status.Provider, status.Title, status.Artist, status.Album, status.ImageUrl, status.Playing, status.FetchedAt);
 }
