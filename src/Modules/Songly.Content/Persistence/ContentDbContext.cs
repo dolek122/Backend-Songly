@@ -3,7 +3,7 @@ using Songly.Content.Domain;
 
 namespace Songly.Content.Persistence;
 
-/// <summary>The content module's tables: <c>posts</c>, <c>comments</c>, <c>likes</c>, <c>shares</c>.</summary>
+/// <summary>The content module's tables: <c>posts</c>, <c>comments</c>, <c>likes</c>, <c>shares</c>, <c>post_image_uploads</c>.</summary>
 /// <remarks>
 /// Comments, likes and shares reference the post with <c>ON DELETE CASCADE</c> — within this
 /// module, so deleting a post takes everyone's activity under it. <c>posts.community_id</c> has no
@@ -19,6 +19,8 @@ internal sealed class ContentDbContext(DbContextOptions<ContentDbContext> option
     public DbSet<Like> Likes => Set<Like>();
 
     public DbSet<Share> Shares => Set<Share>();
+
+    public DbSet<PostImageUpload> PostImageUploads => Set<PostImageUpload>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -44,6 +46,12 @@ internal sealed class ContentDbContext(DbContextOptions<ContentDbContext> option
         {
             share.ToTable("shares");
             share.HasKey(s => new { s.PostId, s.UserId });
+        });
+
+        modelBuilder.Entity<PostImageUpload>(upload =>
+        {
+            upload.ToTable("post_image_uploads");
+            upload.HasKey(u => u.ImageKey);
         });
     }
 }

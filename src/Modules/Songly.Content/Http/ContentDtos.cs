@@ -18,6 +18,9 @@ internal sealed record CreatePostRequest
     public string? ImageKey { get; init; }
 }
 
+/// <summary>The result of an upload: <c>key</c> comes back in <see cref="CreatePostRequest.ImageKey"/>, <c>url</c> lets the client show a preview before the post exists.</summary>
+internal sealed record PostImageResponse(string Key, string Url);
+
 internal sealed record CreateCommentRequest
 {
     [NotBlank]

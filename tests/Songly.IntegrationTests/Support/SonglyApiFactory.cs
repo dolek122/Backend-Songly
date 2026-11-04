@@ -133,6 +133,7 @@ public sealed class SonglyApiFactory : WebApplicationFactory<Program>, IAsyncLif
         // The tests of the jobs themselves turn them on in an instance of their own.
         builder.UseSetting("Songly:Security:Registration:CleanupEnabled", "false");
         builder.UseSetting("Songly:Security:SessionCleanup:Enabled", "false");
+        builder.UseSetting("Songly:Content:PostImage:CleanupEnabled", "false");
         builder.ConfigureTestServices(services =>
         {
             services.AddSingleton<IModule, ProbeModule>();

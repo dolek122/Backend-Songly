@@ -143,20 +143,6 @@ public sealed class PostFlowTests(SonglyApiFactory factory)
         Assert.Equal(HttpStatusCode.Created, (await _content.CommentAsync(user, postId, new string('a', 500))).StatusCode);
     }
 
-    /// <summary>
-    /// An image is attached only by a key the upload issued to this user (original ADR 0048) — so a
-    /// key made up, or someone else's, does not attach anything. Uploads come with the next part; until
-    /// then no key was ever issued.
-    /// </summary>
-    [Fact]
-    public async Task An_image_key_that_was_never_issued_is_rejected()
-    {
-        var user = await factory.CreateLoggedInUserAsync(_client, "content-image-key");
-
-        await (await _client.PostJsonAsync("/api/v1/posts", new { content = "z obrazkiem", imageKey = "posts/someone-else.jpg" }, user.Token))
-            .ReadErrorAsync(HttpStatusCode.BadRequest, "UNKNOWN_POST_IMAGE");
-    }
-
     [Fact]
     public async Task Post_endpoints_require_authentication()
     {

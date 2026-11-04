@@ -2,9 +2,12 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
+using Songly.Common.Media;
 using Songly.Common.Paging;
 using Songly.Common.Web;
+using Songly.Content.Images;
 using Songly.Content.Posts;
 
 namespace Songly.Content.Http;
@@ -17,6 +20,24 @@ internal static class ContentEndpoints
 
         posts.MapPost(string.Empty, async Task<Created<PostResponse>> (CreatePostRequest request, ClaimsPrincipal user, PostService service, CancellationToken cancellationToken) =>
             TypedResults.Created((string?)null, await service.CreateAsync(user.GetUserId(), request, communityId: null, cancellationToken)));
+
+        // A step of its own before publishing (see CreatePostRequest). Multipart, because the file goes
+        // through the backend: only there can we check what the bytes are and strip their metadata
+        // (original ADR 0010). No antiforgery: the API authenticates with a bearer token, not a cookie.
+        posts.MapPost("/image", async (IFormFile file, ClaimsPrincipal user, PostImageUploads uploads, CancellationToken cancellationToken) =>
+        {
+            if (file.Length == 0)
+            {
+                throw new EmptyUploadException();
+            }
+
+            using var content = new MemoryStream((int)file.Length);
+            await file.CopyToAsync(content, cancellationToken);
+            return await uploads.UploadAsync(user.GetUserId(), content.ToArray(), cancellationToken);
+        })
+            .DisableAntiforgery()
+            .WithFormOptions(multipartBodyLengthLimit: UploadLimits.MaxFileBytes)
+            .WithMetadata(new RequestSizeLimitAttribute(UploadLimits.MaxRequestBytes));
 
         posts.MapGet(string.Empty, (Guid? authorId, PageQuery page, ClaimsPrincipal user, PostService service, CancellationToken cancellationToken) =>
             service.ListAsync(authorId, user.GetUserId(), page, cancellationToken));
