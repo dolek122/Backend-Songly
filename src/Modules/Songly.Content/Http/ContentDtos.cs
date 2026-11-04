@@ -56,3 +56,52 @@ internal sealed record CommentResponse(
     string? AuthorAvatarUrl,
     string Content,
     DateTimeOffset CreatedAt);
+
+internal enum ReportReasonDto
+{
+    Spam,
+    Harassment,
+    HateSpeech,
+    IllegalContent,
+    Other,
+}
+
+internal sealed record ReportPostRequest
+{
+    [NotNull]
+    public ReportReasonDto? Reason { get; init; }
+
+    [Size(0, 500)]
+    public string? Details { get; init; }
+}
+
+/// <summary>
+/// An entry of the moderation queue: the report together with its post — the moderator should not
+/// have to ask for the content separately.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <c>reportCount</c> is how many independent people reported the post — weightier than the report
+/// itself: one report can be malicious, a dozen hardly.
+/// </para>
+/// <para>
+/// <c>reporterUpheldCount</c> and <c>reporterDismissedCount</c> are this person's accuracy <b>in this
+/// community</b> and <b>within the history window</b> (original ADR 0025, 0027, 0030) — a weight
+/// given to the moderator, not subtracted for them. Only both together mean anything: "5 upheld, 1
+/// dismissed" reads differently from "0 and 1". The community, because a moderator has no right to
+/// learn what the reporter did in other communities (the allowance counts globally); the window,
+/// because the same numbers drive the penalty, and a number without a time scale is not a weight a
+/// person can judge.
+/// </para>
+/// </remarks>
+internal sealed record PostReportResponse(
+    Guid Id,
+    ReportReasonDto Reason,
+    string? Details,
+    Guid ReporterId,
+    string? ReporterDisplayName,
+    DateTimeOffset CreatedAt,
+    long ReportCount,
+    int ReporterUpheldCount,
+    int ReporterDismissedCount,
+    PostResponse Post);

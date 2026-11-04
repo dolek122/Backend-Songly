@@ -9,6 +9,7 @@ using Songly.Common.Paging;
 using Songly.Common.Web;
 using Songly.Content.Images;
 using Songly.Content.Posts;
+using Songly.Content.Reports;
 
 namespace Songly.Content.Http;
 
@@ -78,6 +79,13 @@ internal static class ContentEndpoints
         posts.MapPost("/{postId}/comments", async Task<Created<CommentResponse>> (Guid postId, CreateCommentRequest request, ClaimsPrincipal user, CommentService service, CancellationToken cancellationToken) =>
             TypedResults.Created((string?)null, await service.AddAsync(postId, user.GetUserId(), request, cancellationToken)));
 
+        // Anyone signed in may report, non-members too: communities are open for reading.
+        posts.MapPost("/{postId}/reports", async Task<Accepted> (Guid postId, ReportPostRequest request, ClaimsPrincipal user, ReportService service, CancellationToken cancellationToken) =>
+        {
+            await service.ReportAsync(postId, user.GetUserId(), request, cancellationToken);
+            return TypedResults.Accepted((string?)null);
+        });
+
         posts.MapGet("/{postId}/comments", (Guid postId, PageQuery page, ClaimsPrincipal user, CommentService service, CancellationToken cancellationToken) =>
             service.ListAsync(postId, user.GetUserId(), page, cancellationToken));
 
@@ -97,6 +105,19 @@ internal static class ContentEndpoints
 
         communityPosts.MapPost(string.Empty, async Task<Created<PostResponse>> (Guid communityId, CreatePostRequest request, ClaimsPrincipal user, PostService service, CancellationToken cancellationToken) =>
             TypedResults.Created((string?)null, await service.CreateAsync(user.GetUserId(), request, communityId, cancellationToken)));
+
+        // The moderation queue: the path belongs to the community, the reports to content's posts.
+        // "/post-reports", not "/posts/reports" — that would collide with the pattern of a post's id.
+        var queue = endpoints.MapGroup("/api/v1/communities/{communityId}/post-reports").WithTags("Moderation queue");
+
+        queue.MapGet(string.Empty, (Guid communityId, PageQuery page, ClaimsPrincipal user, ReportService service, CancellationToken cancellationToken) =>
+            service.PendingAsync(communityId, user.GetUserId(), page, cancellationToken));
+
+        queue.MapPost("/{reportId}/dismissal", async Task<NoContent> (Guid communityId, Guid reportId, ClaimsPrincipal user, ReportService service, CancellationToken cancellationToken) =>
+        {
+            await service.DismissAsync(communityId, reportId, user.GetUserId(), cancellationToken);
+            return TypedResults.NoContent();
+        });
 
         communityPosts.MapGet(string.Empty, (Guid communityId, PageQuery page, ClaimsPrincipal user, PostService service, CancellationToken cancellationToken) =>
             service.ListCommunityAsync(communityId, user.GetUserId(), page, cancellationToken));

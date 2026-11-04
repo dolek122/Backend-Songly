@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.Testing" />
     <PackageReference Include="Testcontainers" />
     <PackageReference Include="Testcontainers.Minio" />
     <PackageReference Include="Testcontainers.PostgreSql" />
