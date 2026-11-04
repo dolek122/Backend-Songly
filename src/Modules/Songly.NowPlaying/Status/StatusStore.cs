@@ -61,6 +61,24 @@ internal sealed class StatusStore(IConnectionMultiplexer redis, IOptions<NowPlay
         return statuses;
     }
 
+    /// <summary>
+    /// The provider's cached answer: <c>(true, status)</c> when it is cached — a <c>null</c> status
+    /// meaning "nothing is playing" — and <c>(false, null)</c> when the provider has to be asked.
+    /// </summary>
+    public async Task<(bool Cached, StoredStatus? Status)> ProviderAsync(Guid userId)
+    {
+        var raw = await Database.StringGetAsync(ProviderKey(userId));
+        return raw.IsNullOrEmpty ? (false, null) : (true, Parse(raw));
+    }
+
+    /// <summary>The provider's answer for <see cref="NowPlayingOptions.CacheTtl"/> — <c>null</c> remembered as "nothing is playing".</summary>
+    public Task SetProviderAsync(Guid userId, StoredStatus? status) =>
+        Database.StringSetAsync(ProviderKey(userId), status is null ? NothingPlaying : JsonSerializer.Serialize(status), options.Value.CacheTtl);
+
+    public Task ForgetProviderAsync(Guid userId) => Database.KeyDeleteAsync(ProviderKey(userId));
+
+    public async Task<StoredStatus?> ManualAsync(Guid userId) => Parse(await Database.StringGetAsync(ManualKey(userId)));
+
     public Task SetManualAsync(Guid userId, StoredStatus status) =>
         Database.StringSetAsync(ManualKey(userId), JsonSerializer.Serialize(status), options.Value.ManualStatusTtl);
 

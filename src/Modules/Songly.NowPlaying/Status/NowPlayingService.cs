@@ -3,6 +3,7 @@ using Songly.Identity.Contracts;
 using Songly.NowPlaying.Domain;
 using Songly.NowPlaying.Http;
 using Songly.NowPlaying.Persistence;
+using Songly.NowPlaying.Providers;
 using Songly.Profile.Contracts;
 using Songly.Social.Contracts;
 
@@ -16,6 +17,7 @@ namespace Songly.NowPlaying.Status;
 internal sealed class NowPlayingService(
     NowPlayingDbContext db,
     StatusStore statuses,
+    IMusicProvider provider,
     ISocialGraph socialGraph,
     IProfileDirectory profiles,
     ISuspendedAccounts suspendedAccounts,
@@ -30,8 +32,42 @@ internal sealed class NowPlayingService(
     /// a failure and covered the whole screen, the manual-status form included — the only way out of
     /// that state. The owner sees their status even when it is hidden from friends.
     /// </summary>
-    public async Task<NowPlayingStatusResponse?> MineAsync(Guid userId) =>
-        await statuses.CurrentAsync(userId) is { } status ? ToResponse(status) : null;
+    /// <remarks>
+    /// The only endpoint that may ask the provider live (when nothing is cached), so the only one that
+    /// shows the client its failures — 502 <c>MUSIC_PROVIDER_ERROR</c>, 409 when consent was taken back.
+    /// The link is checked before the provider and without the cache: a cached "nothing is playing"
+    /// would hide a freshly connected Spotify for the whole lifetime of the entry.
+    /// </remarks>
+    public async Task<NowPlayingStatusResponse?> MineAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        if (await statuses.ManualAsync(userId) is { } manual)
+        {
+            return ToResponse(manual);
+        }
+
+        var (cached, status) = await statuses.ProviderAsync(userId);
+        if (cached)
+        {
+            return status is null ? null : ToResponse(status);
+        }
+
+        if (!await db.Links.AnyAsync(l => l.UserId == userId && l.Provider == provider.Name, cancellationToken))
+        {
+            return null;
+        }
+
+        var fresh = await FetchAndCacheAsync(userId, cancellationToken);
+        return fresh is null ? null : ToResponse(fresh);
+    }
+
+    /// <summary>Asks the provider and caches the answer — "nothing is playing" included, so that a silent user is not asked again before the entry expires.</summary>
+    private async Task<StoredStatus?> FetchAndCacheAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        var track = await provider.CurrentlyPlayingAsync(userId, cancellationToken);
+        var status = track is null ? null : new StoredStatus(provider.Name, track.Title, track.Artist, track.Album, track.ImageUrl, track.Playing, time.GetUtcNow());
+        await statuses.SetProviderAsync(userId, status);
+        return status;
+    }
 
     /// <summary>
     /// The universal fallback for services without an official API (original ADR 0005) — chosen

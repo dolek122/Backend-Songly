@@ -19,6 +19,9 @@ internal sealed record ManualNowPlayingRequest
     public string? Source { get; init; }
 }
 
+/// <summary>Where to send the user's browser to give consent at the provider.</summary>
+internal sealed record ConnectResponse(string AuthorizeUrl);
+
 internal sealed record UpdateNowPlayingSettingsRequest
 {
     [NotNull]
