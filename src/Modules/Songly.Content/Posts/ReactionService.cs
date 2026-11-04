@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Songly.Common.Events;
+using Songly.Content.Contracts;
 using Songly.Content.Domain;
 using Songly.Content.Persistence;
 
@@ -6,20 +8,21 @@ namespace Songly.Content.Posts;
 
 /// <summary>Likes and shares — idempotent both ways: liking twice is one like, unliking what is not there is no error.</summary>
 /// <remarks>
-/// The original publishes <c>PostLikedEvent</c> and <c>PostSharedEvent</c> for a new like or share
-/// (not for a repeated <c>PUT</c>); their consumers are the notification and analytics modules, and
-/// the events arrive with the first of them. Two simultaneous first likes both see "not there yet";
+/// A new like or share — not a repeated <c>PUT</c> — is published as <see cref="PostLiked"/> or
+/// <see cref="PostShared"/> after it is saved. Two simultaneous first likes both see "not there yet";
 /// the second insert hits the primary key, and that is a 409, not a 500 (original Claude.md §6).
 /// </remarks>
-internal sealed class ReactionService(ContentDbContext db, ContentVisibility visibility, TimeProvider time)
+internal sealed class ReactionService(ContentDbContext db, ContentVisibility visibility, IDomainEvents events, TimeProvider time)
 {
     public async Task LikeAsync(Guid postId, Guid userId, CancellationToken cancellationToken)
     {
-        await visibility.VisiblePostAsync(postId, userId, cancellationToken);
+        var post = await visibility.VisiblePostAsync(postId, userId, cancellationToken);
         if (!await db.Likes.AnyAsync(l => l.PostId == postId && l.UserId == userId, cancellationToken))
         {
-            db.Likes.Add(new Like(postId, userId, time.GetUtcNow()));
+            var now = time.GetUtcNow();
+            db.Likes.Add(new Like(postId, userId, now));
             await db.SaveChangesAsync(cancellationToken);
+            await events.PublishAsync(new PostLiked(postId, post.AuthorId, userId, now), cancellationToken);
         }
     }
 
@@ -36,11 +39,13 @@ internal sealed class ReactionService(ContentDbContext db, ContentVisibility vis
 
     public async Task ShareAsync(Guid postId, Guid userId, CancellationToken cancellationToken)
     {
-        await visibility.VisiblePostAsync(postId, userId, cancellationToken);
+        var post = await visibility.VisiblePostAsync(postId, userId, cancellationToken);
         if (!await db.Shares.AnyAsync(s => s.PostId == postId && s.UserId == userId, cancellationToken))
         {
-            db.Shares.Add(new Share(postId, userId, time.GetUtcNow()));
+            var now = time.GetUtcNow();
+            db.Shares.Add(new Share(postId, userId, now));
             await db.SaveChangesAsync(cancellationToken);
+            await events.PublishAsync(new PostShared(postId, post.AuthorId, userId, now), cancellationToken);
         }
     }
 
