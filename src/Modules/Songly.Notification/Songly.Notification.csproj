@@ -1,2 +1,16 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <!--
+      Contracts only: the events of content, social and community it turns into notifications,
+      identity for account deletion, profile for actors' names and avatars, social for blocks,
+      community for a community's moderators. Nothing depends on this module.
+    -->
+    <ProjectReference Include="..\Songly.Community\Songly.Community.csproj" />
+    <ProjectReference Include="..\Songly.Content\Songly.Content.csproj" />
+    <ProjectReference Include="..\Songly.Identity\Songly.Identity.csproj" />
+    <ProjectReference Include="..\Songly.Profile\Songly.Profile.csproj" />
+    <ProjectReference Include="..\Songly.Social\Songly.Social.csproj" />
+  </ItemGroup>
+
 </Project>

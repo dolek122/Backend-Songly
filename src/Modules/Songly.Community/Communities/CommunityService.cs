@@ -12,9 +12,8 @@ namespace Songly.Community.Communities;
 
 /// <summary>Communities, membership and roles.</summary>
 /// <remarks>
-/// The original also publishes <c>CommunityMemberJoinedEvent</c> and
-/// <c>CommunityMemberRoleChangedEvent</c>; they arrive with their consumer, the notification
-/// module — publishing to nobody would be code without behaviour.
+/// A new membership is published as <see cref="CommunityMemberJoined"/>, an actual change of role as
+/// <see cref="CommunityMemberRoleChanged"/>, each after the save.
 /// </remarks>
 internal sealed class CommunityService(CommunityDbContext db, IProfileDirectory profiles, IDomainEvents events, ModuleTransaction transaction, TimeProvider time)
     : ICommunityMembership, ICommunityDirectory
@@ -109,7 +108,7 @@ internal sealed class CommunityService(CommunityDbContext db, IProfileDirectory 
     /// <summary>Idempotent: joining again leaves the membership as it is.</summary>
     public async Task JoinAsync(Guid communityId, Guid userId, CancellationToken cancellationToken)
     {
-        await RequireAsync(communityId, cancellationToken);
+        var community = await RequireAsync(communityId, cancellationToken);
 
         // Without this a ban would only be a removal from the list: joining is open and immediate, so
         // the banned user would come back in one request, and moderation would be a race of clicks.
@@ -120,8 +119,10 @@ internal sealed class CommunityService(CommunityDbContext db, IProfileDirectory 
 
         if (!await IsMemberAsync(communityId, userId, cancellationToken))
         {
-            db.Members.Add(new CommunityMember(communityId, userId, CommunityRole.Member, time.GetUtcNow()));
+            var now = time.GetUtcNow();
+            db.Members.Add(new CommunityMember(communityId, userId, CommunityRole.Member, now));
             await db.SaveChangesAsync(cancellationToken);
+            await events.PublishAsync(new CommunityMemberJoined(communityId, community.OwnerId, userId, now), cancellationToken);
         }
     }
 
@@ -183,8 +184,17 @@ internal sealed class CommunityService(CommunityDbContext db, IProfileDirectory 
             throw new CannotModerateOwnerException();
         }
 
-        membership.ChangeRole(role == CommunityRoleDto.Moderator ? CommunityRole.Moderator : CommunityRole.Member);
+        var newRole = role == CommunityRoleDto.Moderator ? CommunityRole.Moderator : CommunityRole.Member;
+        if (membership.Role == newRole)
+        {
+            return;
+        }
+
+        membership.ChangeRole(newRole);
         await db.SaveChangesAsync(cancellationToken);
+        await events.PublishAsync(
+            new CommunityMemberRoleChanged(communityId, targetUserId, requesterId, newRole == CommunityRole.Moderator, time.GetUtcNow()),
+            cancellationToken);
     }
 
     /// <summary>

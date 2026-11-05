@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Songly.Common.Events;
 using Songly.Common.Paging;
 using Songly.Profile.Contracts;
 using Songly.Social.Contracts;
@@ -10,11 +11,10 @@ namespace Songly.Social.Graph;
 
 /// <summary>Friend requests, friendships and blocks.</summary>
 /// <remarks>
-/// The original publishes <c>FriendRequestSentEvent</c> and <c>FriendRequestAcceptedEvent</c>; their
-/// consumers are the notification and analytics modules, and the events arrive with the first of
-/// them — publishing to nobody would be code without behaviour.
+/// A sent request is published as <see cref="FriendRequestSent"/>, an accepted one — also one accepted
+/// by a request the other way — as <see cref="FriendRequestAccepted"/>, each after the save.
 /// </remarks>
-internal sealed class SocialService(SocialDbContext db, IProfileDirectory profiles, TimeProvider time) : ISocialGraph
+internal sealed class SocialService(SocialDbContext db, IProfileDirectory profiles, IDomainEvents events, TimeProvider time) : ISocialGraph
 {
     /// <summary>
     /// Sends a request. When the addressee had already sent one the other way, that one is accepted
@@ -50,12 +50,14 @@ internal sealed class SocialService(SocialDbContext db, IProfileDirectory profil
             reverse.Accept(now);
             db.Friendships.Add(Friendship.Between(requesterId, addresseeId, now));
             await db.SaveChangesAsync(cancellationToken);
+            await events.PublishAsync(new FriendRequestAccepted(reverse.Id, reverse.RequesterId, reverse.AddresseeId, now), cancellationToken);
             return await ToResponseAsync(reverse, cancellationToken);
         }
 
         var request = new FriendRequest(requesterId, addresseeId, now);
         db.FriendRequests.Add(request);
         await db.SaveChangesAsync(cancellationToken);
+        await events.PublishAsync(new FriendRequestSent(request.Id, requesterId, addresseeId, now), cancellationToken);
         return await ToResponseAsync(request, cancellationToken);
     }
 
@@ -76,6 +78,7 @@ internal sealed class SocialService(SocialDbContext db, IProfileDirectory profil
         request.Accept(now);
         db.Friendships.Add(Friendship.Between(request.RequesterId, request.AddresseeId, now));
         await db.SaveChangesAsync(cancellationToken);
+        await events.PublishAsync(new FriendRequestAccepted(request.Id, request.RequesterId, request.AddresseeId, now), cancellationToken);
         return await ToResponseAsync(request, cancellationToken);
     }
 

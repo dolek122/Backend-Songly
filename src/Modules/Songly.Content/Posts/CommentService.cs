@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using Songly.Common.Events;
 using Songly.Common.Paging;
 using Songly.Community.Contracts;
+using Songly.Content.Contracts;
 using Songly.Content.Domain;
 using Songly.Content.Http;
 using Songly.Content.Persistence;
@@ -10,9 +12,9 @@ namespace Songly.Content.Posts;
 
 /// <summary>Comments under posts.</summary>
 /// <remarks>
-/// The original publishes <c>PostCommentedEvent</c> for every comment and
-/// <c>CommunityCommentRemovedEvent</c> when a moderator removes someone else's comment; they arrive
-/// with their consumers (notification, analytics, moderation log).
+/// Every comment is published as <see cref="PostCommented"/> after it is saved. The original also
+/// publishes <c>CommunityCommentRemovedEvent</c> when a moderator removes someone else's comment; it
+/// arrives with the moderation part of the notification module.
 /// </remarks>
 internal sealed class CommentService(
     ContentDbContext db,
@@ -20,6 +22,7 @@ internal sealed class CommentService(
     PostService posts,
     ICommunityMembership communities,
     IProfileDirectory profiles,
+    IDomainEvents events,
     TimeProvider time)
 {
     /// <summary>
@@ -39,6 +42,7 @@ internal sealed class CommentService(
         var comment = new Comment(postId, authorId, request.Content!, time.GetUtcNow());
         db.Comments.Add(comment);
         await db.SaveChangesAsync(cancellationToken);
+        await events.PublishAsync(new PostCommented(postId, post.AuthorId, comment.Id, authorId, comment.CreatedAt), cancellationToken);
         return (await ViewsAsync([comment], cancellationToken))[0];
     }
 
