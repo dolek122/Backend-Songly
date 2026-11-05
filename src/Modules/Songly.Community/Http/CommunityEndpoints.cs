@@ -105,15 +105,15 @@ internal static class CommunityEndpoints
         admin.MapGet("/ban-appeals", (BanService bans, CancellationToken cancellationToken) => bans.EscalatedAppealsAsync(cancellationToken));
 
         // Overturning the ban is upholding the appeal at the second instance.
-        admin.MapDelete("/communities/{communityId}/bans/{userId}", async Task<NoContent> (Guid communityId, Guid userId, BanService bans, CancellationToken cancellationToken) =>
+        admin.MapDelete("/communities/{communityId}/bans/{userId}", async Task<NoContent> (Guid communityId, Guid userId, ClaimsPrincipal user, BanService bans, CancellationToken cancellationToken) =>
         {
-            await bans.OverturnAsync(communityId, userId, cancellationToken);
+            await bans.OverturnAsync(communityId, userId, user.GetUserId(), cancellationToken);
             return TypedResults.NoContent();
         });
 
-        admin.MapPost("/communities/{communityId}/bans/{userId}/escalation-rejection", async Task<NoContent> (Guid communityId, Guid userId, BanService bans, CancellationToken cancellationToken) =>
+        admin.MapPost("/communities/{communityId}/bans/{userId}/escalation-rejection", async Task<NoContent> (Guid communityId, Guid userId, ClaimsPrincipal user, BanService bans, CancellationToken cancellationToken) =>
         {
-            await bans.RejectEscalationAsync(communityId, userId, cancellationToken);
+            await bans.RejectEscalationAsync(communityId, userId, user.GetUserId(), cancellationToken);
             return TypedResults.NoContent();
         });
     }

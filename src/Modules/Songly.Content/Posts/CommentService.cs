@@ -12,9 +12,8 @@ namespace Songly.Content.Posts;
 
 /// <summary>Comments under posts.</summary>
 /// <remarks>
-/// Every comment is published as <see cref="PostCommented"/> after it is saved. The original also
-/// publishes <c>CommunityCommentRemovedEvent</c> when a moderator removes someone else's comment; it
-/// arrives with the moderation part of the notification module.
+/// Every comment is published as <see cref="PostCommented"/> after it is saved, and a moderator's removal
+/// of someone else's comment as <see cref="CommunityCommentRemoved"/>.
 /// </remarks>
 internal sealed class CommentService(
     ContentDbContext db,
@@ -72,6 +71,7 @@ internal sealed class CommentService(
     {
         var comment = await db.Comments.SingleOrDefaultAsync(c => c.Id == commentId && c.PostId == postId, cancellationToken)
             ?? throw new CommentNotFoundException();
+        CommunityCommentRemoved? removal = null;
         if (comment.AuthorId != requesterId)
         {
             var post = await db.Posts.SingleOrDefaultAsync(p => p.Id == postId, cancellationToken) ?? throw new CommentNotFoundException();
@@ -79,10 +79,17 @@ internal sealed class CommentService(
             {
                 throw new NotResourceOwnerException();
             }
+
+            // Moderation reaches community posts only, so a removal by someone else has a community.
+            removal = new CommunityCommentRemoved(post.CommunityId!.Value, postId, comment.AuthorId, requesterId, time.GetUtcNow());
         }
 
         db.Comments.Remove(comment);
         await db.SaveChangesAsync(cancellationToken);
+        if (removal is not null)
+        {
+            await events.PublishAsync(removal, cancellationToken);
+        }
     }
 
     private async Task<IReadOnlyList<CommentResponse>> ViewsAsync(IReadOnlyList<Comment> comments, CancellationToken cancellationToken)

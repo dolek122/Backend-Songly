@@ -25,7 +25,7 @@ does; this repository documents *how* it is done in .NET ([ADR 0001](docs/adr/00
 | NowPlaying | Own status, the manual fallback for services without an API, friends' statuses from Redis, visibility setting, suspended accounts left out, Spotify through OAuth (callback back to the app, tokens encrypted with AES-GCM, revoked consent drops the link), the friends' statuses live (SSE through a Redis channel), a server-side poll of the watched users with a shared backoff | ✅ |
 | Matching | Genre-based matching: a weighted Jaccard (a shared rare genre counts for more), damped by how much both profiles tell, with the confidence next to the score; friends, blocked and suspended users left out | ✅ |
 | Community | Communities, membership, roles (moderators named by the owner), bans (temporary or permanent), appeals to the moderators and escalation to the administration, the membership contract for content | ✅ |
-| Notification | Inbox from other modules' events (likes, comments, shares, friend requests, joins, role changes), hidden from blocked users without deleting anything, undo/redo loops deduplicated, an unread friend request collapsed; moderation decisions, e-mail and push next | 🚧 |
+| Notification | Inbox from other modules' events (likes, comments, shares, friend requests, joins, role changes), hidden from blocked users without deleting anything, undo/redo loops deduplicated, an unread friend request collapsed; moderation decisions to both sides (bans, appeals, the second instance, removed posts and comments, reports), through blocks and without the moderator's name; e-mail and push next | 🚧 |
 | Analytics | PII-free event counters | — |
 | ModerationLog | History of moderation decisions | — |
 

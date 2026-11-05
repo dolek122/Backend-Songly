@@ -47,6 +47,9 @@ without qualifying it everywhere. The table is still `notifications`.
 - The handler runs inside the HTTP request, so the request waits for the inbox write. For one
   recipient that is one or two short queries; the moderation part fans out to every moderator of a
   community, which stays a handful of rows.
-- The moderation decisions (bans, removed posts, reports, appeals) are not published yet. Their
-  notification types, and the rules that let them through a block and hide the moderator's name, are
-  already in place for the next part.
+- Moderation decisions follow the same path: a new ban, an appeal and its answers, the second
+  instance's decision, a removed post or comment, a post entering the queue, a dismissed report. The
+  gates that keep them from repeating ("only a new ban", "only when the post had no pending report",
+  "only the click that changed the report") sit at the publishers, so every later channel — e-mail,
+  push — inherits them. Notifications to a community's moderators ask `ICommunityMembership` for them
+  at the moment of the event; failing to find them is swallowed like a failed write.

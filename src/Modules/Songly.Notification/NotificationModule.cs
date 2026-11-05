@@ -15,8 +15,8 @@ using Songly.Social.Contracts;
 namespace Songly.Notification;
 
 /// <summary>
-/// The in-app inbox, filled from other modules' events. E-mail for moderation decisions and push come
-/// in later parts.
+/// The in-app inbox, filled from other modules' events — their activity and moderation decisions.
+/// E-mail for moderation decisions and push come in later parts.
 /// </summary>
 public sealed class NotificationModule : IModule
 {
@@ -33,6 +33,18 @@ public sealed class NotificationModule : IModule
         services.AddScoped<IDomainEventHandler<FriendRequestAccepted>>(provider => provider.GetRequiredService<RecordActivityNotifications>());
         services.AddScoped<IDomainEventHandler<CommunityMemberJoined>>(provider => provider.GetRequiredService<RecordActivityNotifications>());
         services.AddScoped<IDomainEventHandler<CommunityMemberRoleChanged>>(provider => provider.GetRequiredService<RecordActivityNotifications>());
+
+        services.AddScoped<RecordModerationNotifications>();
+        services.AddScoped<IDomainEventHandler<CommunityMemberBanned>>(provider => provider.GetRequiredService<RecordModerationNotifications>());
+        services.AddScoped<IDomainEventHandler<CommunityBanAppealSubmitted>>(provider => provider.GetRequiredService<RecordModerationNotifications>());
+        services.AddScoped<IDomainEventHandler<CommunityBanAppealAccepted>>(provider => provider.GetRequiredService<RecordModerationNotifications>());
+        services.AddScoped<IDomainEventHandler<CommunityBanAppealRejected>>(provider => provider.GetRequiredService<RecordModerationNotifications>());
+        services.AddScoped<IDomainEventHandler<CommunityBanEscalationAccepted>>(provider => provider.GetRequiredService<RecordModerationNotifications>());
+        services.AddScoped<IDomainEventHandler<CommunityBanEscalationRejected>>(provider => provider.GetRequiredService<RecordModerationNotifications>());
+        services.AddScoped<IDomainEventHandler<CommunityPostRemoved>>(provider => provider.GetRequiredService<RecordModerationNotifications>());
+        services.AddScoped<IDomainEventHandler<CommunityCommentRemoved>>(provider => provider.GetRequiredService<RecordModerationNotifications>());
+        services.AddScoped<IDomainEventHandler<PostReported>>(provider => provider.GetRequiredService<RecordModerationNotifications>());
+        services.AddScoped<IDomainEventHandler<PostReportDismissed>>(provider => provider.GetRequiredService<RecordModerationNotifications>());
 
         services.AddScoped<IDomainEventHandler<UserAccountDeletionRequested>, DeleteNotificationsOnAccountDeletion>();
     }
