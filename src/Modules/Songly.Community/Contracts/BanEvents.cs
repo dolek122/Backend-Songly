@@ -24,6 +24,13 @@ public sealed record CommunityBanAppealAccepted(Guid CommunityId, Guid UserId, G
 public sealed record CommunityBanAppealRejected(Guid CommunityId, Guid UserId, Guid ModeratorId, DateTimeOffset OccurredAt);
 
 /// <summary>
+/// The banned user sent a rejected appeal to the <b>platform's administration</b> (original ADR 0028).
+/// Every administrator is told: they have no queue in the app they would look into by themselves. At most
+/// once per ban — escalating is possible only from "rejected", and that state is left for good.
+/// </summary>
+public sealed record CommunityBanAppealEscalated(Guid CommunityId, Guid UserId, DateTimeOffset OccurredAt);
+
+/// <summary>
 /// The platform's administration overturned a community's ban (original ADR 0028). A separate event from
 /// <see cref="CommunityBanAppealAccepted"/> despite the same effect: there the community's own moderation
 /// lifted the ban, here <b>someone from outside</b> did, and a message saying "the moderation accepted

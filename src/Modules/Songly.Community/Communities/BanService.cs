@@ -15,9 +15,8 @@ namespace Songly.Community.Communities;
 /// </summary>
 /// <remarks>
 /// Each decision the inbox tells someone about is published after its save: a new ban, an appeal, its
-/// acceptance and rejection, the second instance's decision. The original also publishes
-/// <c>CommunityBanLiftedEvent</c> and <c>CommunityBanAppealEscalatedEvent</c>; they arrive with their
-/// consumers, the moderation log and the administrators' e-mail.
+/// acceptance and rejection, the escalation, the second instance's decision. The original also
+/// publishes <c>CommunityBanLiftedEvent</c>; it arrives with its consumer, the moderation log.
 /// </remarks>
 internal sealed class BanService(CommunityDbContext db, CommunityService communities, IProfileDirectory profiles, IDomainEvents events, TimeProvider time)
 {
@@ -176,8 +175,10 @@ internal sealed class BanService(CommunityDbContext db, CommunityService communi
             throw new BanAppealNotEscalatableException();
         }
 
-        ban.EscalateAppeal(time.GetUtcNow());
+        var now = time.GetUtcNow();
+        ban.EscalateAppeal(now);
         await db.SaveChangesAsync(cancellationToken);
+        await events.PublishAsync(new CommunityBanAppealEscalated(communityId, userId, now), cancellationToken);
     }
 
     /// <summary>

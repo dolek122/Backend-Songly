@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Routing;
 using Songly.Common.Paging;
 using Songly.Common.Web;
 using Songly.Notification.Inbox;
+using Songly.Notification.Mail;
 
 namespace Songly.Notification.Http;
 
@@ -24,6 +25,17 @@ internal static class NotificationEndpoints
         notifications.MapPost("/{notificationId}/read", async Task<NoContent> (Guid notificationId, ClaimsPrincipal user, NotificationService inbox, CancellationToken cancellationToken) =>
         {
             await inbox.MarkReadAsync(notificationId, user.GetUserId(), cancellationToken);
+            return TypedResults.NoContent();
+        });
+
+        // Mail only (original ADR 0020) — hence "mail-preferences", not "preferences": the inbox cannot be
+        // turned off, and the endpoint's name says so.
+        notifications.MapGet("/mail-preferences", (ClaimsPrincipal user, MailPreferenceService preferences, CancellationToken cancellationToken) =>
+            preferences.SettingsAsync(user.GetUserId(), cancellationToken));
+
+        notifications.MapPut("/mail-preferences", async Task<NoContent> (UpdateMailPreferencesRequest request, ClaimsPrincipal user, MailPreferenceService preferences, CancellationToken cancellationToken) =>
+        {
+            await preferences.UpdateAsync(user.GetUserId(), request.DecisionsAboutMe!.Value, request.ModerationQueue!.Value, cancellationToken);
             return TypedResults.NoContent();
         });
 

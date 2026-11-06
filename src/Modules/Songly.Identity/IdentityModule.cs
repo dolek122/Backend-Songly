@@ -33,6 +33,9 @@ public sealed class IdentityModule : IModule
         services.AddScoped<TokenIssuer>();
         services.AddScoped<AuthService>();
         services.AddScoped<ISuspendedAccounts, SuspendedAccounts>();
+        services.AddScoped<UserDirectory>();
+        services.AddScoped<IUserEmailDirectory>(provider => provider.GetRequiredService<UserDirectory>());
+        services.AddScoped<IAdminDirectory>(provider => provider.GetRequiredService<UserDirectory>());
 
         services.AddOptions<SessionCleanupOptions>()
             .Bind(configuration.GetSection(SessionCleanupOptions.Section))

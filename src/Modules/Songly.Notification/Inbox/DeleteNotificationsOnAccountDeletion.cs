@@ -7,10 +7,14 @@ namespace Songly.Notification.Inbox;
 
 /// <summary>
 /// A deleted account's notifications, received and caused — both columns have a foreign key to
-/// <c>users</c> — inside the deletion's transaction.
+/// <c>users</c> — and its mail preferences, inside the deletion's transaction.
 /// </summary>
 internal sealed class DeleteNotificationsOnAccountDeletion(NotificationDbContext db) : IDomainEventHandler<UserAccountDeletionRequested>
 {
-    public Task HandleAsync(UserAccountDeletionRequested domainEvent, CancellationToken cancellationToken) =>
-        db.Notifications.Where(n => n.UserId == domainEvent.UserId || n.ActorId == domainEvent.UserId).ExecuteDeleteAsync(cancellationToken);
+    public async Task HandleAsync(UserAccountDeletionRequested domainEvent, CancellationToken cancellationToken)
+    {
+        var userId = domainEvent.UserId;
+        await db.Notifications.Where(n => n.UserId == userId || n.ActorId == userId).ExecuteDeleteAsync(cancellationToken);
+        await db.MailPreferences.Where(p => p.UserId == userId).ExecuteDeleteAsync(cancellationToken);
+    }
 }
