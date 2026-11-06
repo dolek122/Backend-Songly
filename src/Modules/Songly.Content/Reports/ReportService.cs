@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Songly.Common.Events;
 using Songly.Common.Paging;
 using Songly.Community.Contracts;
+using Songly.Content.Contracts;
 using Songly.Content.Domain;
 using Songly.Content.Http;
 using Songly.Content.Persistence;
@@ -12,10 +14,9 @@ namespace Songly.Content.Reports;
 
 /// <summary>Reporting posts to a community's moderation, and the moderators' queue.</summary>
 /// <remarks>
-/// The original publishes <c>PostReportedEvent</c> when a post enters the queue (it had no pending
-/// report before — only then are all moderators called, original ADR 0012, 0049) and
-/// <c>PostReportDismissedEvent</c>; they arrive with the notification, analytics and moderation-log
-/// modules, together with the mail interval for moderators (ADR 0018), which belongs to the mail.
+/// A post entering the queue (it had no pending report before — only then are all moderators called,
+/// original ADR 0012, 0049) is published as <see cref="PostReported"/>, a dismissal as
+/// <see cref="PostReportDismissed"/>. The mail interval for moderators (ADR 0018) comes with the e-mail.
 /// </remarks>
 internal sealed class ReportService(
     ContentDbContext db,
@@ -26,6 +27,7 @@ internal sealed class ReportService(
     IProfileDirectory profiles,
     ModerationMetrics metrics,
     IOptions<ReportOptions> options,
+    IDomainEvents events,
     TimeProvider time)
 {
     /// <summary>
@@ -79,8 +81,13 @@ internal sealed class ReportService(
             throw new ReportRateLimitExceededException();
         }
 
+        var entersQueue = !await db.PostReports.AnyAsync(r => r.PostId == postId && r.Status == ReportStatus.Pending, cancellationToken);
         db.PostReports.Add(new PostReport(postId, reporterId, ReportMapping.ToDomain(request.Reason!.Value), request.Details, now));
         await db.SaveChangesAsync(cancellationToken);
+        if (entersQueue)
+        {
+            await events.PublishAsync(new PostReported(communityId, postId, reporterId, now), cancellationToken);
+        }
     }
 
     /// <summary>
@@ -166,6 +173,12 @@ internal sealed class ReportService(
         }
 
         await transaction.CommitAsync(cancellationToken);
+
+        // Only the statement that changed the row tells the reporter — a second click is no new decision.
+        if (dismissed == 1)
+        {
+            await events.PublishAsync(new PostReportDismissed(communityId, report.PostId, report.ReporterId, requesterId, now), cancellationToken);
+        }
     }
 
     private async Task RequireModeratorAsync(Guid communityId, Guid requesterId, CancellationToken cancellationToken)

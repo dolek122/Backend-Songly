@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using Songly.Common.Events;
 using Songly.Common.Paging;
+using Songly.Community.Contracts;
 using Songly.Community.Domain;
 using Songly.Community.Http;
 using Songly.Community.Persistence;
@@ -12,11 +14,12 @@ namespace Songly.Community.Communities;
 /// the platform's administration second, on the banned user's request only (ADR 0028).
 /// </summary>
 /// <remarks>
-/// The original publishes an event for each decision (banned, lifted, appeal submitted, accepted,
-/// rejected, escalated, overturned, escalation rejected); the notification, analytics and
-/// moderation-log modules consume them, and the events arrive with those modules.
+/// Each decision the inbox tells someone about is published after its save: a new ban, an appeal, its
+/// acceptance and rejection, the second instance's decision. The original also publishes
+/// <c>CommunityBanLiftedEvent</c> and <c>CommunityBanAppealEscalatedEvent</c>; they arrive with their
+/// consumers, the moderation log and the administrators' e-mail.
 /// </remarks>
-internal sealed class BanService(CommunityDbContext db, CommunityService communities, IProfileDirectory profiles, TimeProvider time)
+internal sealed class BanService(CommunityDbContext db, CommunityService communities, IProfileDirectory profiles, IDomainEvents events, TimeProvider time)
 {
     /// <summary>
     /// Bans a user: removes the membership and blocks the return.
@@ -53,28 +56,43 @@ internal sealed class BanService(CommunityDbContext db, CommunityService communi
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
         await db.Members.Where(m => m.CommunityId == communityId && m.UserId == targetUserId).ExecuteDeleteAsync(cancellationToken);
         var existing = await db.Bans.SingleOrDefaultAsync(b => b.CommunityId == communityId && b.UserId == targetUserId, cancellationToken);
+        var banned = existing is null || !existing.IsActiveAt(now);
         if (existing is null)
         {
             db.Bans.Add(new CommunityBan(communityId, targetUserId, requesterId, request?.Reason, now, expiresAt));
         }
-        else if (!existing.IsActiveAt(now))
+        else if (banned)
         {
             existing.Reimpose(requesterId, request?.Reason, now, expiresAt);
         }
 
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+
+        // Only a ban that changed the state — a repeated click on an active ban tells nobody anything new.
+        if (banned)
+        {
+            await events.PublishAsync(new CommunityMemberBanned(communityId, targetUserId, requesterId, expiresAt, now), cancellationToken);
+        }
     }
 
     /// <summary>
-    /// Idempotent. Lifting a ban with a pending appeal <b>is</b> accepting that appeal (original
-    /// ADR 0017) — no separate endpoint, because it is the same decision.
+    /// Idempotent. Lifting an active ban with a pending appeal <b>is</b> accepting that appeal (original
+    /// ADR 0017) — no separate endpoint, because it is the same decision; without this rule a moderator
+    /// lifting the ban directly would leave the petition unanswered while answering it. An expired ban is
+    /// moot: clearing a dead row accepts nothing.
     /// </summary>
     public async Task UnbanAsync(Guid communityId, Guid requesterId, Guid targetUserId, CancellationToken cancellationToken)
     {
         await communities.RequireAsync(communityId, cancellationToken);
         await RequireModeratorAsync(communityId, requesterId, cancellationToken);
-        await db.Bans.Where(b => b.CommunityId == communityId && b.UserId == targetUserId).ExecuteDeleteAsync(cancellationToken);
+        var now = time.GetUtcNow();
+        var appealAccepted = await ActiveBanAsync(communityId, targetUserId, cancellationToken) is { AppealStatus: BanAppealStatus.Pending };
+        var deleted = await db.Bans.Where(b => b.CommunityId == communityId && b.UserId == targetUserId).ExecuteDeleteAsync(cancellationToken);
+        if (appealAccepted && deleted == 1)
+        {
+            await events.PublishAsync(new CommunityBanAppealAccepted(communityId, targetUserId, requesterId, now), cancellationToken);
+        }
     }
 
     /// <summary>
@@ -121,8 +139,10 @@ internal sealed class BanService(CommunityDbContext db, CommunityService communi
             throw new BanAppealAlreadySubmittedException();
         }
 
-        ban.SubmitAppeal(text, time.GetUtcNow());
+        var now = time.GetUtcNow();
+        ban.SubmitAppeal(text, now);
         await db.SaveChangesAsync(cancellationToken);
+        await events.PublishAsync(new CommunityBanAppealSubmitted(communityId, userId, now), cancellationToken);
     }
 
     /// <summary>Rejecting the appeal: the ban stays, and this ban's case is closed — at the first instance.</summary>
@@ -138,6 +158,7 @@ internal sealed class BanService(CommunityDbContext db, CommunityService communi
 
         ban.RejectAppeal();
         await db.SaveChangesAsync(cancellationToken);
+        await events.PublishAsync(new CommunityBanAppealRejected(communityId, targetUserId, requesterId, time.GetUtcNow()), cancellationToken);
     }
 
     /// <summary>
@@ -184,21 +205,23 @@ internal sealed class BanService(CommunityDbContext db, CommunityService communi
     /// autonomy stays the rule; the platform's review is the exception. It does not forbid the
     /// community to ban again — that would be a real limit on its autonomy.
     /// </summary>
-    public async Task OverturnAsync(Guid communityId, Guid targetUserId, CancellationToken cancellationToken)
+    public async Task OverturnAsync(Guid communityId, Guid targetUserId, Guid adminId, CancellationToken cancellationToken)
     {
         await communities.RequireAsync(communityId, cancellationToken);
         var ban = await EscalatedBanAsync(communityId, targetUserId, cancellationToken);
         db.Bans.Remove(ban);
         await db.SaveChangesAsync(cancellationToken);
+        await events.PublishAsync(new CommunityBanEscalationAccepted(communityId, targetUserId, adminId, time.GetUtcNow()), cancellationToken);
     }
 
     /// <summary>The second instance keeps the ban — the end of the ladder.</summary>
-    public async Task RejectEscalationAsync(Guid communityId, Guid targetUserId, CancellationToken cancellationToken)
+    public async Task RejectEscalationAsync(Guid communityId, Guid targetUserId, Guid adminId, CancellationToken cancellationToken)
     {
         await communities.RequireAsync(communityId, cancellationToken);
         var ban = await EscalatedBanAsync(communityId, targetUserId, cancellationToken);
         ban.RejectEscalation();
         await db.SaveChangesAsync(cancellationToken);
+        await events.PublishAsync(new CommunityBanEscalationRejected(communityId, targetUserId, adminId, time.GetUtcNow()), cancellationToken);
     }
 
     private async Task<CommunityBan> EscalatedBanAsync(Guid communityId, Guid userId, CancellationToken cancellationToken)

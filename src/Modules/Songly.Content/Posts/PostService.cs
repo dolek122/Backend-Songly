@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using Songly.Common.Events;
 using Songly.Common.Paging;
 using Songly.Community.Contracts;
+using Songly.Content.Contracts;
 using Songly.Content.Domain;
 using Songly.Content.Http;
 using Songly.Content.Images;
@@ -24,6 +26,7 @@ internal sealed class PostService(
     ReporterHistory reporterHistory,
     ICommunityMembership communities,
     ISocialGraph socialGraph,
+    IDomainEvents events,
     TimeProvider time)
 {
     /// <summary>
@@ -150,6 +153,7 @@ internal sealed class PostService(
         // Deleted by moderation (not by its author — that decides nobody's report): every report of the
         // post turns out to be right (original ADR 0027). The reporters are read before the delete —
         // the cascade takes the reports along, and afterwards there is nothing to read.
+        CommunityPostRemoved? removal = null;
         if (post.AuthorId != requesterId && post.CommunityId is { } communityId)
         {
             var reporterIds = await db.PostReports.Where(r => r.PostId == postId).Select(r => r.ReporterId).Distinct().ToListAsync(cancellationToken);
@@ -157,6 +161,8 @@ internal sealed class PostService(
             {
                 reporterHistory.Record(reporterId, communityId, Domain.ReporterDecisionOutcome.Upheld);
             }
+
+            removal = new CommunityPostRemoved(communityId, post.AuthorId, requesterId, reporterIds.ToHashSet(), time.GetUtcNow());
         }
 
         // One save: the decisions and the deletion commit together.
@@ -165,6 +171,11 @@ internal sealed class PostService(
         if (post.ImageKey is { } imageKey)
         {
             await files.DeleteOrphanedAsync(imageKey, cancellationToken);
+        }
+
+        if (removal is not null)
+        {
+            await events.PublishAsync(removal, cancellationToken);
         }
     }
 

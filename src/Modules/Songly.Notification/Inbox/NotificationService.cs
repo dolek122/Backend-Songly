@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Songly.Common.Paging;
+using Songly.Community.Contracts;
 using Songly.Notification.Domain;
 using Songly.Notification.Http;
 using Songly.Notification.Persistence;
@@ -14,6 +15,7 @@ internal sealed partial class NotificationService(
     NotificationDbContext db,
     IProfileDirectory profiles,
     ISocialGraph socialGraph,
+    ICommunityMembership communities,
     TimeProvider time,
     ILogger<NotificationService> logger)
 {
@@ -43,6 +45,32 @@ internal sealed partial class NotificationService(
             // What failed to save must not be saved again by the next notification of the same request.
             db.ChangeTracker.Clear();
             LogRecordFailed(type, recipientId, exception);
+        }
+    }
+
+    /// <summary>
+    /// The same notification to every moderator of a community — the owner included — as they are at this
+    /// moment. Asking the community module through its contract: the notification module has no business
+    /// in the membership table (original Claude.md §2). A reporter who is a moderator drops out in
+    /// <see cref="RecordAsync"/>: nobody notifies themselves.
+    /// </summary>
+    /// <remarks>Failing to find the moderators is swallowed like a failed write, for the same reason.</remarks>
+    public async Task RecordForModeratorsAsync(Guid communityId, Guid actorId, NotificationType type, Guid resourceId, DateTimeOffset occurredAt, CancellationToken cancellationToken)
+    {
+        IReadOnlySet<Guid> moderatorIds;
+        try
+        {
+            moderatorIds = await communities.ModeratorIdsAsync(communityId, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            LogModeratorsUnknown(type, communityId, exception);
+            return;
+        }
+
+        foreach (var moderatorId in moderatorIds)
+        {
+            await RecordAsync(moderatorId, actorId, type, resourceId, occurredAt, cancellationToken);
         }
     }
 
@@ -169,6 +197,9 @@ internal sealed partial class NotificationService(
         NotificationType.CommunityModeratorRevoked => NotificationTypeDto.CommunityModeratorRevoked,
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, null),
     };
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Could not find the moderators of {CommunityId} for a {Type} notification")]
+    private partial void LogModeratorsUnknown(NotificationType type, Guid communityId, Exception exception);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Could not record a {Type} notification for {RecipientId}")]
     private partial void LogRecordFailed(NotificationType type, Guid recipientId, Exception exception);
