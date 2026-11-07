@@ -148,6 +148,18 @@ Without the .NET SDK, the whole stack runs in Docker:
 docker compose --profile app up --build
 ```
 
+## Deploying
+
+[`render.yaml`](render.yaml) is a [Render](https://render.com) blueprint: the application from the
+`Dockerfile`, a PostgreSQL database and a Redis instance. Settings are environment variables named after
+configuration keys (`Songly__Security__Jwt__Secret` is `Songly:Security:Jwt:Secret`); the secrets are asked
+for when the blueprint is applied, never stored in the file. Render hands out the database as a
+`postgresql://` URL, which the application accepts as well as Npgsql's own form.
+
+The blueprint declares `Songly__Security__ProductionSecretsRequired=true`, so the instance refuses to
+start with the public development secrets from `appsettings.json`, and switches on the forwarded headers,
+so the rate limiter sees clients' addresses rather than Render's proxy.
+
 ## Tests
 
 ```bash
