@@ -7,6 +7,7 @@ using Songly.Common.Mail;
 using Songly.Common.Modules;
 using Songly.Common.Persistence;
 using Songly.Common.Push;
+using Songly.Common.RateLimiting;
 using Songly.Common.Storage;
 using Songly.Common.Throttling;
 using Songly.Common.Validation;
@@ -42,6 +43,7 @@ builder.Services.AddSerilog((_, logger) =>
 builder.Services.AddSonglyDatabase();
 builder.Services.AddSonglyEvents();
 builder.Services.AddSonglyRedis(builder.Configuration);
+builder.Services.AddSonglyRateLimiting(builder.Configuration);
 builder.Services.AddSonglyMail(builder.Configuration);
 builder.Services.AddSonglyPush(builder.Configuration);
 builder.Services.AddSonglyStorage(builder.Configuration);
@@ -67,10 +69,14 @@ if (app.Configuration.GetValue("Database:MigrateOnStartup", defaultValue: true))
 var modules = app.Services.GetServices<IModule>().ToList();
 
 app.UseSonglyWeb();
+app.UseSonglyRateLimiting(app.Configuration);
 foreach (var module in modules)
 {
     module.UsePipeline(app);
 }
+
+// After the modules' pipeline — identity's authentication tells it who is asking.
+app.UseSonglyUserRateLimiting();
 
 // Operational endpoints are public: a load balancer probing /health has no token.
 app.MapOpenApi().AllowAnonymous();

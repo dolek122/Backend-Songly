@@ -142,6 +142,12 @@ public sealed class SonglyApiFactory : WebApplicationFactory<Program>, IAsyncLif
         builder.UseSetting("Songly:Content:PostImage:CleanupEnabled", "false");
         builder.UseSetting("Songly:NowPlaying:Poll:Enabled", "false");
         builder.UseSetting("Songly:NowPlaying:Stream:HeartbeatEnabled", "false");
+
+        // Off here, as in the original's base test class: flow tests make series of writes with one account and
+        // logins from one address, and a limit hit halfway would be a 429 unrelated to the test. The tests of
+        // the limits turn them on in an instance of their own.
+        builder.UseSetting("Songly:Security:RateLimit:Enabled", "false");
+        builder.UseSetting("Songly:Security:UserRateLimit:Enabled", "false");
         builder.ConfigureTestServices(services =>
         {
             services.AddSingleton<IModule, ProbeModule>();

@@ -69,6 +69,6 @@ was ever part of the contract.
   client depends on it.
 - `UserSessionsRevokedEvent` (consumed by push notifications in the original) is not published
   yet. Domain events arrive together with their first consumer.
-- Login rate limiting (original ADR 0034) and the metrics exporter come with the observability and
-  rate-limiting work; the counters (`songly.auth.login.attempts`, `songly.auth.refresh.attempts`)
-  are already recorded.
+- Rate limiting of login and the other public paths, and of writes per user, is ADR 0014. The
+  metrics exporter comes with the observability work; the counters (`songly.auth.login.attempts`,
+  `songly.auth.refresh.attempts`) are already recorded.
