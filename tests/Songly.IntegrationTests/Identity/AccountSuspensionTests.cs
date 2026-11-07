@@ -12,7 +12,7 @@ namespace Songly.IntegrationTests.Identity;
 /// What matters most: a suspension cuts off <b>everything</b> — enforcement lives in the roles, not
 /// in checks scattered over modules — and still leaves open exactly what must stay open. The
 /// e-mail to the suspended user (term, never the reason) belongs to the notification module and is
-/// tested with it; account deletion while suspended, with account deletion.
+/// tested with it (<c>SuspensionMailTests</c>); account deletion while suspended, with account deletion.
 /// </remarks>
 public sealed class AccountSuspensionTests(SonglyApiFactory factory)
 {

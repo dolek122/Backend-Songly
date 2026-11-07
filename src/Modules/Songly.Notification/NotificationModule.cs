@@ -66,6 +66,11 @@ public sealed class NotificationModule : IModule
         services.AddScoped<IDomainEventHandler<CommunityBanEscalationAccepted>>(provider => provider.GetRequiredService<ModerationMailer>());
         services.AddScoped<IDomainEventHandler<CommunityBanEscalationRejected>>(provider => provider.GetRequiredService<ModerationMailer>());
         services.AddScoped<IDomainEventHandler<PostReportDismissed>>(provider => provider.GetRequiredService<ModerationMailer>());
+        services.AddScoped<IDomainEventHandler<UserSuspended>>(provider => provider.GetRequiredService<ModerationMailer>());
+        services.AddScoped<IDomainEventHandler<UserSuspensionLifted>>(provider => provider.GetRequiredService<ModerationMailer>());
+        services.AddScoped<IDomainEventHandler<UserSuspensionAppealSubmitted>>(provider => provider.GetRequiredService<ModerationMailer>());
+        services.AddScoped<IDomainEventHandler<UserSuspensionAppealAccepted>>(provider => provider.GetRequiredService<ModerationMailer>());
+        services.AddScoped<IDomainEventHandler<UserSuspensionAppealRejected>>(provider => provider.GetRequiredService<ModerationMailer>());
 
         services.AddScoped<IDomainEventHandler<UserAccountDeletionRequested>, DeleteNotificationsOnAccountDeletion>();
     }
