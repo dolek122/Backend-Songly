@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Songly.Common.Events;
+using Songly.Identity.Contracts;
 using Songly.Identity.Http;
 using Songly.Identity.Persistence;
 
@@ -13,10 +15,12 @@ namespace Songly.Identity.Administration;
 /// <b>The first administrator still has to be created in the database</b>, and that cannot be
 /// removed: only an administrator grants the role, so the first one has to come from somewhere.
 /// This removes manual SQL as an <i>operating procedure</i>, not as a one-time bootstrap. Every
-/// change leaves a warning in the log (ids only, no addresses) and a metric; the entry in the
-/// moderation history arrives with that module.
+/// change leaves three traces, each answering another question (original ADR 0031): a warning in
+/// the log (ids only, no addresses) — what is happening now; a metric — how much of it; and an
+/// entry in the moderation history, through <see cref="AdminRoleChanged"/> — who gave whom that
+/// power, and when, durably and through the API.
 /// </remarks>
-internal sealed partial class AdminRoleService(IdentityDbContext db, AdministrationMetrics metrics, ILogger<AdminRoleService> logger)
+internal sealed partial class AdminRoleService(IdentityDbContext db, AdministrationMetrics metrics, IDomainEvents events, TimeProvider time, ILogger<AdminRoleService> logger)
 {
     /// <summary>
     /// The full list, <b>without paging</b> — against the API convention, on purpose. The set is
@@ -45,6 +49,7 @@ internal sealed partial class AdminRoleService(IdentityDbContext db, Administrat
 
         metrics.RoleChange("granted");
         LogGranted(targetUserId, requesterId);
+        await events.PublishAsync(new AdminRoleChanged(targetUserId, requesterId, Granted: true, time.GetUtcNow()), cancellationToken);
     }
 
     /// <summary>
@@ -71,6 +76,7 @@ internal sealed partial class AdminRoleService(IdentityDbContext db, Administrat
 
         metrics.RoleChange("revoked");
         LogRevoked(targetUserId, requesterId);
+        await events.PublishAsync(new AdminRoleChanged(targetUserId, requesterId, Granted: false, time.GetUtcNow()), cancellationToken);
     }
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Administrator role granted to {UserId} by {RequesterId}")]

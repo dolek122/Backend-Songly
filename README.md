@@ -27,7 +27,7 @@ does; this repository documents *how* it is done in .NET ([ADR 0001](docs/adr/00
 | Community | Communities, membership, roles (moderators named by the owner), bans (temporary or permanent), appeals to the moderators and escalation to the administration, the membership contract for content | ✅ |
 | Notification | Inbox from other modules' events (likes, comments, shares, friend requests, joins, role changes), hidden from blocked users without deleting anything, undo/redo loops deduplicated; moderation decisions to both sides through blocks and without the moderator's name; e-mail for those decisions and for suspensions, with mail preferences and an interval for moderators' mail; push through FCM for every new entry, with devices unpinned together with the sessions | ✅ |
 | Analytics | Counters of domain events without personal data — activity and moderation decisions (bans split by term, appeals and their outcomes, posts entering the report queue) — and an admin-only summary over a window of days; each count also a metric | ✅ |
-| ModerationLog | History of moderation decisions | — |
+| ModerationLog | Append-only history of moderation decisions — community bans and their lifting, removed posts (with how many reports they had) and comments, reports upheld and dismissed per reporter, appeals and escalations, moderator roles, suspensions and their appeals, the administrator role — for a community's moderators and, per person, for the administrators; without reasons or appeal texts | ✅ |
 
 ## Architecture
 

@@ -9,6 +9,15 @@ namespace Songly.Community.Contracts;
 public sealed record CommunityMemberBanned(Guid CommunityId, Guid UserId, Guid ModeratorId, DateTimeOffset? ExpiresAt, DateTimeOffset OccurredAt);
 
 /// <summary>
+/// An active ban lifted — by the community's moderation, or overturned by the administration (then the
+/// moderator is the administrator). Published next to <see cref="CommunityBanAppealAccepted"/> or
+/// <see cref="CommunityBanEscalationAccepted"/> where those apply: they say <i>why</i> the ban went (and feed the
+/// notifications), this says only <i>that</i> it went (and feeds the moderation log, original ADR 0024). Clearing
+/// an expired ban is cleaning a dead row, not a decision, and publishes nothing.
+/// </summary>
+public sealed record CommunityBanLifted(Guid CommunityId, Guid UserId, Guid ModeratorId, DateTimeOffset OccurredAt);
+
+/// <summary>
 /// The banned user appealed (original ADR 0017). At most once per ban: the appeal is one, a second is
 /// a 409, so the anti-spam gate is at the publisher, as everywhere.
 /// </summary>
