@@ -15,8 +15,8 @@ namespace Songly.Community.Communities;
 /// </summary>
 /// <remarks>
 /// Each decision the inbox tells someone about is published after its save: a new ban, an appeal, its
-/// acceptance and rejection, the escalation, the second instance's decision. The original also
-/// publishes <c>CommunityBanLiftedEvent</c>; it arrives with its consumer, the moderation log.
+/// acceptance and rejection, the escalation, the second instance's decision, and every lifting of an
+/// active ban (<see cref="CommunityBanLifted"/>), for the moderation log.
 /// </remarks>
 internal sealed class BanService(CommunityDbContext db, CommunityService communities, IProfileDirectory profiles, IDomainEvents events, TimeProvider time)
 {
@@ -86,12 +86,19 @@ internal sealed class BanService(CommunityDbContext db, CommunityService communi
         await communities.RequireAsync(communityId, cancellationToken);
         await RequireModeratorAsync(communityId, requesterId, cancellationToken);
         var now = time.GetUtcNow();
-        var appealAccepted = await ActiveBanAsync(communityId, targetUserId, cancellationToken) is { AppealStatus: BanAppealStatus.Pending };
+        var active = await ActiveBanAsync(communityId, targetUserId, cancellationToken);
         var deleted = await db.Bans.Where(b => b.CommunityId == communityId && b.UserId == targetUserId).ExecuteDeleteAsync(cancellationToken);
-        if (appealAccepted && deleted == 1)
+        if (active is null || deleted == 0)
+        {
+            return;
+        }
+
+        if (active.AppealStatus == BanAppealStatus.Pending)
         {
             await events.PublishAsync(new CommunityBanAppealAccepted(communityId, targetUserId, requesterId, now), cancellationToken);
         }
+
+        await events.PublishAsync(new CommunityBanLifted(communityId, targetUserId, requesterId, now), cancellationToken);
     }
 
     /// <summary>
@@ -212,7 +219,9 @@ internal sealed class BanService(CommunityDbContext db, CommunityService communi
         var ban = await EscalatedBanAsync(communityId, targetUserId, cancellationToken);
         db.Bans.Remove(ban);
         await db.SaveChangesAsync(cancellationToken);
-        await events.PublishAsync(new CommunityBanEscalationAccepted(communityId, targetUserId, adminId, time.GetUtcNow()), cancellationToken);
+        var now = time.GetUtcNow();
+        await events.PublishAsync(new CommunityBanEscalationAccepted(communityId, targetUserId, adminId, now), cancellationToken);
+        await events.PublishAsync(new CommunityBanLifted(communityId, targetUserId, adminId, now), cancellationToken);
     }
 
     /// <summary>The second instance keeps the ban — the end of the ladder.</summary>

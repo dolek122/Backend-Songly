@@ -1,2 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <!--
+      Contracts only: the decisions of identity, content and community it records, and community's membership
+      for who may read a community's history. Nothing depends on this module.
+    -->
+    <ProjectReference Include="..\Songly.Community\Songly.Community.csproj" />
+    <ProjectReference Include="..\Songly.Content\Songly.Content.csproj" />
+    <ProjectReference Include="..\Songly.Identity\Songly.Identity.csproj" />
+  </ItemGroup>
+
 </Project>

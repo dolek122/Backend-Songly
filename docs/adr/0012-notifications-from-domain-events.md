@@ -61,3 +61,10 @@ without qualifying it everywhere. The table is still `notifications`.
 - The analytics module counts the same events with the same rule: a count that cannot be written is
   logged, never a failed request. `UserRegistered`, published inside the account's transaction, is
   counted after that commits (`IAfterCommit`), so a rolled-back registration is not counted.
+- The moderation log records the same events with the same rule. Its entries are written after the
+  decision's save, so a rolled-back decision leaves no history — which matters more here than anywhere,
+  because the log is append-only and cannot be corrected later. The original wrote them from
+  `AFTER_COMMIT` listeners in a `REQUIRES_NEW` transaction, and lost them silently whenever a helper
+  called the recording method on `this` (bypassing Spring's proxy); with the order of statements as the
+  "after commit" there is no proxy to bypass. The entries of one decision (a removed post and an upheld
+  report per reporter) go in one save: all of them or none.
