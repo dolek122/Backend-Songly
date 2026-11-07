@@ -88,7 +88,7 @@ public sealed class NowPlayingStatusTests(SonglyApiFactory factory)
     /// <summary>
     /// The manual status takes precedence over the provider's until it is cleared (original Claude.md §7),
     /// on the single read and on the friends list alike. The provider's entry is written straight into
-    /// Redis: until the Spotify integration arrives, the API cannot produce it.
+    /// Redis: the test is about precedence, not about how a provider's status gets there (the poller's tests).
     /// </summary>
     [Fact]
     public async Task A_manual_status_takes_precedence_over_the_providers()

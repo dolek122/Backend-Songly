@@ -45,8 +45,8 @@ inside a `ModuleTransaction` must be sequential.
 
 - A module with per-user data registers an `IDomainEventHandler<UserAccountDeletionRequested>`. If it
   does not, the first account deletion fails on a foreign key — loudly, and rolled back.
-- Until other modules are ported, a test-only handler with its own DbContext stands in for them: it
-  checks that handlers run while the account still exists, and that its own write is rolled back
-  when it fails.
-- `UserRegisteredEvent` and the other events of the original arrive with their first consumer; the
-  mechanism is now in place for them.
+- A test-only handler with its own DbContext proves the mechanism on its own: it checks that
+  handlers run while the account still exists, and that its own write is rolled back when it fails.
+  With every module ported, `AccountDeletionFlowTests` deletes an account with data in all of them.
+- The original's events arrived one by one, each with its first consumer, through this same
+  mechanism.

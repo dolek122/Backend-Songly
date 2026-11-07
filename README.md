@@ -36,7 +36,7 @@ boundaries, so that a module can be extracted into a service later without rewri
 
 ```
 src/
-├── Songly.Api/            host: composition root, pipeline, health, OpenAPI
+├── Songly.Api/            host: composition root, pipeline, health, metrics, OpenAPI
 ├── Songly.Common/         infrastructure only — knows nothing about the domain
 ├── Songly.Migrations/     original SQL migrations + DbUp runner
 └── Modules/
@@ -108,7 +108,7 @@ request.
 ## Tech stack
 
 .NET 10 · ASP.NET Core Minimal APIs · EF Core · PostgreSQL 16 · Redis · S3 / MinIO · DbUp · JWT bearer auth ·
-bcrypt · MailKit · Serilog (JSON logs) ·
+bcrypt · MailKit · Serilog (JSON logs) · OpenTelemetry metrics (Prometheus) ·
 OpenAPI + Scalar · xUnit v3 · Testcontainers · ArchUnitNET · Docker · GitHub Actions
 
 ## Running locally
@@ -128,6 +128,7 @@ The API listens on `http://localhost:8080`:
 - `/scalar` — interactive API documentation
 - `/openapi/v1.json` — OpenAPI document
 - `/health` — health check (includes the database)
+- `/metrics` — Prometheus metrics (administrators only)
 
 To click through the mobile app on an Android emulator, run the `Local` environment instead:
 
