@@ -67,8 +67,8 @@ was ever part of the contract.
   metadata, so the fallback policy applies to them. With a token the answer is 405/415 as in the
   original. Matching the original exactly would mean special-casing framework internals; no
   client depends on it.
-- `UserSessionsRevokedEvent` (consumed by push notifications in the original) is not published
-  yet. Domain events arrive together with their first consumer.
+- `UserSessionsRevoked` (the original's `UserSessionsRevokedEvent`) is published since push
+  notifications, its consumer, were ported (ADR 0013).
 - Rate limiting of login and the other public paths, and of writes per user, is ADR 0014. The
-  metrics exporter comes with the observability work; the counters (`songly.auth.login.attempts`,
-  `songly.auth.refresh.attempts`) are already recorded.
+  counters (`songly.auth.login.attempts`, `songly.auth.refresh.attempts`) are exported for
+  Prometheus at `/metrics`, for administrators only (ADR 0015).

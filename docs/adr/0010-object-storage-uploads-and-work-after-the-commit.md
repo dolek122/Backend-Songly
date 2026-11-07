@@ -69,5 +69,5 @@ file, never a row pointing to nothing.
 - Test images are built without an imaging library: a PNG assembled byte by byte and a JPEG
   stored as a constant. Where the original decoded the result to prove it is still an image, the
   tests compare it byte for byte with the file it must be, which is a stronger claim.
-- Later modules with files (post photos) or other state outside the database use the same two
+- Other modules with files (post photos) or other state outside the database use the same two
   tools: `IObjectStorage`, and `IAfterCommit.Defer` from their account-deletion handler.

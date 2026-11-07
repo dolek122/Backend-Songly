@@ -5,7 +5,7 @@ namespace Songly.IntegrationTests.Profile;
 /// <summary>
 /// A suspended account's profile is hidden (original ADR 0026) — from the search and from a direct
 /// link alike — and comes back in full when the suspension is lifted or expires. The profile part
-/// of the original <c>SuspendedContentHiddenIntegrationTest</c>; the posts part comes with content.
+/// of the original <c>SuspendedContentHiddenIntegrationTest</c>; the posts part is <c>SuspendedContentTests</c>.
 /// </summary>
 public sealed class SuspendedProfileTests(SonglyApiFactory factory)
 {

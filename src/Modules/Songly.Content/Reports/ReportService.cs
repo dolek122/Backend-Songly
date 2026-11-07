@@ -16,7 +16,8 @@ namespace Songly.Content.Reports;
 /// <remarks>
 /// A post entering the queue (it had no pending report before — only then are all moderators called,
 /// original ADR 0012, 0049) is published as <see cref="PostReported"/>, a dismissal as
-/// <see cref="PostReportDismissed"/>. The mail interval for moderators (ADR 0018) comes with the e-mail.
+/// <see cref="PostReportDismissed"/>. The interval between mails to moderators (ADR 0018) belongs to the
+/// notification module, which sends them.
 /// </remarks>
 internal sealed class ReportService(
     ContentDbContext db,
