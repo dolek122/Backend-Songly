@@ -1,3 +1,5 @@
+using Songly.Common.Validation;
+
 namespace Songly.Notification.Http;
 
 /// <param name="ActorDisplayName">Absent for moderation decisions — the decision is the community's, not a person's (original ADR 0045).</param>
@@ -35,4 +37,20 @@ internal enum NotificationTypeDto
     BanAppealRejected,
     CommunityModeratorGranted,
     CommunityModeratorRevoked,
+}
+
+/// <summary>The e-mail preferences (original ADR 0020). The inbox is not here on purpose — it is always complete and no setting governs it.</summary>
+internal sealed record MailPreferencesResponse(bool DecisionsAboutMe, bool ModerationQueue);
+
+/// <summary>
+/// Both fields required: <c>PUT</c> replaces the settings whole, so a missing field would mean "leave it" and
+/// quietly turn this into a partial update.
+/// </summary>
+internal sealed record UpdateMailPreferencesRequest
+{
+    [NotNull]
+    public bool? DecisionsAboutMe { get; init; }
+
+    [NotNull]
+    public bool? ModerationQueue { get; init; }
 }

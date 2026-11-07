@@ -9,14 +9,15 @@ using Songly.Content.Contracts;
 using Songly.Identity.Contracts;
 using Songly.Notification.Http;
 using Songly.Notification.Inbox;
+using Songly.Notification.Mail;
 using Songly.Notification.Persistence;
 using Songly.Social.Contracts;
 
 namespace Songly.Notification;
 
 /// <summary>
-/// The in-app inbox, filled from other modules' events — their activity and moderation decisions.
-/// E-mail for moderation decisions and push come in later parts.
+/// The in-app inbox, filled from other modules' events — their activity and moderation decisions —
+/// and e-mail for the moderation decisions, under the recipient's mail preferences. Push comes later.
 /// </summary>
 public sealed class NotificationModule : IModule
 {
@@ -45,6 +46,26 @@ public sealed class NotificationModule : IModule
         services.AddScoped<IDomainEventHandler<CommunityCommentRemoved>>(provider => provider.GetRequiredService<RecordModerationNotifications>());
         services.AddScoped<IDomainEventHandler<PostReported>>(provider => provider.GetRequiredService<RecordModerationNotifications>());
         services.AddScoped<IDomainEventHandler<PostReportDismissed>>(provider => provider.GetRequiredService<RecordModerationNotifications>());
+
+        // Mail after the inbox, as a second, independent channel — registered later, so it runs later.
+        services.AddOptions<ModerationMailOptions>()
+            .Bind(configuration.GetSection(ModerationMailOptions.Section))
+            .Validate(o => o.ModeratorInterval > TimeSpan.Zero, $"{ModerationMailOptions.Section}: ModeratorInterval must be positive")
+            .ValidateOnStart();
+        services.AddSingleton<ModerationMailMetrics>();
+        services.AddScoped<MailPreferenceService>();
+        services.AddScoped<ModerationMailer>();
+        services.AddScoped<IDomainEventHandler<CommunityMemberBanned>>(provider => provider.GetRequiredService<ModerationMailer>());
+        services.AddScoped<IDomainEventHandler<CommunityPostRemoved>>(provider => provider.GetRequiredService<ModerationMailer>());
+        services.AddScoped<IDomainEventHandler<CommunityCommentRemoved>>(provider => provider.GetRequiredService<ModerationMailer>());
+        services.AddScoped<IDomainEventHandler<PostReported>>(provider => provider.GetRequiredService<ModerationMailer>());
+        services.AddScoped<IDomainEventHandler<CommunityBanAppealSubmitted>>(provider => provider.GetRequiredService<ModerationMailer>());
+        services.AddScoped<IDomainEventHandler<CommunityBanAppealAccepted>>(provider => provider.GetRequiredService<ModerationMailer>());
+        services.AddScoped<IDomainEventHandler<CommunityBanAppealRejected>>(provider => provider.GetRequiredService<ModerationMailer>());
+        services.AddScoped<IDomainEventHandler<CommunityBanAppealEscalated>>(provider => provider.GetRequiredService<ModerationMailer>());
+        services.AddScoped<IDomainEventHandler<CommunityBanEscalationAccepted>>(provider => provider.GetRequiredService<ModerationMailer>());
+        services.AddScoped<IDomainEventHandler<CommunityBanEscalationRejected>>(provider => provider.GetRequiredService<ModerationMailer>());
+        services.AddScoped<IDomainEventHandler<PostReportDismissed>>(provider => provider.GetRequiredService<ModerationMailer>());
 
         services.AddScoped<IDomainEventHandler<UserAccountDeletionRequested>, DeleteNotificationsOnAccountDeletion>();
     }

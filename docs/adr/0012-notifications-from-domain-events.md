@@ -53,3 +53,7 @@ without qualifying it everywhere. The table is still `notifications`.
   "only the click that changed the report") sit at the publishers, so every later channel — e-mail,
   push — inherits them. Notifications to a community's moderators ask `ICommunityMembership` for them
   at the moment of the event; failing to find them is swallowed like a failed write.
+- E-mail for moderation decisions is a second handler of the same events (`ModerationMailer`), not
+  lines in the inbox's: either channel failing leaves the other. It follows the same rule — nothing it
+  does can fail the request — and catches a delivery failure per recipient, so one refused address
+  does not stop the mail to the other moderators.
