@@ -1,0 +1,107 @@
+# Render blueprint — the original's render.yaml, translated to this application's settings. Environment
+# variables name configuration keys with "__" for ":" (Songly__Security__Jwt__Secret is
+# Songly:Security:Jwt:Secret). "sync: false" asks for the value when the blueprint is applied; it never
+# comes from this file.
+#
+# Names of their own, so the blueprint does not collide with the original backend's services in the same
+# Render account.
+databases:
+  - name: songly-dotnet-postgres
+    plan: free
+    databaseName: songly
+    user: songly
+
+services:
+  - type: keyvalue
+    name: songly-dotnet-redis
+    plan: free
+    ipAllowList: []
+    maxmemoryPolicy: allkeys-lru
+
+  - type: web
+    name: songly-dotnet
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      # Render hands out a postgresql:// URL; the application accepts it as well as Npgsql's own form.
+      - key: ConnectionStrings__Songly
+        fromDatabase:
+          name: songly-dotnet-postgres
+          property: connectionString
+      # A redis:// URL, which StackExchange.Redis parses itself.
+      - key: ConnectionStrings__Redis
+        fromService:
+          type: keyvalue
+          name: songly-dotnet-redis
+          property: connectionString
+
+      # Render ends TLS at its proxy, so without this the rate limiter would see one address for every client
+      # and cut them all off with one shared limit (ADR 0014).
+      - key: Songly__ForwardedHeaders__Enabled
+        value: "true"
+
+      # Without real values for the JWT secret and the Spotify token key the application does not start: the
+      # defaults in appsettings.json are public, and with them anyone could sign an administrator's token and
+      # decrypt the Spotify tokens.
+      - key: Songly__Security__ProductionSecretsRequired
+        value: "true"
+      - key: Songly__Security__Jwt__Secret
+        sync: false
+      # 32 random bytes, base64 (openssl rand -base64 32).
+      - key: Songly__NowPlaying__TokenEncryptionKey
+        sync: false
+      - key: Songly__NowPlaying__Spotify__ClientId
+        sync: false
+      - key: Songly__NowPlaying__Spotify__ClientSecret
+        sync: false
+      # https://<this service>/api/v1/now-playing/spotify/callback, as registered in the Spotify dashboard.
+      - key: Songly__NowPlaying__Spotify__RedirectUri
+        sync: false
+
+      # The e-mail channel. Without "smtp" the instance starts with "log" and writes verification and password
+      # reset links to the log instead of sending them — in production not a missing feature but a hole:
+      # anyone reading the logs could take over accounts. "smtp" without a host refuses to start, on purpose.
+      - key: Songly__Mail__Provider
+        value: smtp
+      - key: Songly__Mail__Smtp__Host
+        sync: false
+      - key: Songly__Mail__Smtp__Username
+        sync: false
+      - key: Songly__Mail__Smtp__Password
+        sync: false
+      - key: Songly__Mail__From
+        sync: false
+
+      # The push channel: "log" (only logged) or "fcm" with the whole Firebase service account key (JSON) —
+      # "fcm" without it refuses to start.
+      - key: Songly__Push__Provider
+        value: log
+      - key: Songly__Push__FcmCredentialsJson
+        sync: false
+
+      # The link in the account deletion e-mail must point at THIS service over HTTPS: the /account-deletion
+      # page is for people without the app (original ADR 0043), so songly:// would not open. With another
+      # domain, change it together with the entry in the Google Play form.
+      - key: Songly__Security__AccountDeletion__ConfirmUrl
+        sync: false
+
+      # Object storage (ADR 0010) — Cloudflare R2 or S3. Without it the application starts, but every upload
+      # ends in 502 STORAGE_ERROR.
+      - key: Songly__Storage__Endpoint
+        sync: false
+      - key: Songly__Storage__Bucket
+        sync: false
+      - key: Songly__Storage__AccessKey
+        sync: false
+      - key: Songly__Storage__SecretKey
+        sync: false
+      # The address clients read files from — with R2 or a CDN not the endpoint uploads go to.
+      - key: Songly__Storage__PublicBaseUrl
+        sync: false
+
+      # Left at their defaults (songly:// links into the app, original ADR 0037, 0038); add them here only to
+      # send the links elsewhere: Songly__Security__Registration__VerificationUrl,
+      # Songly__Security__PasswordReset__ResetUrl, Songly__NowPlaying__ConnectResultUrl.

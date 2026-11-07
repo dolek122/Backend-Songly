@@ -37,7 +37,9 @@ public static class DatabaseExtensions
         return services;
     }
 
+    /// <summary>In Npgsql's <c>Key=Value;</c> form, or a <c>postgresql://</c> URL (<see cref="PostgresUrl"/>).</summary>
     public static string ConnectionString(IConfiguration configuration) =>
-        configuration.GetConnectionString(ConnectionStringName)
-        ?? throw new InvalidOperationException($"ConnectionStrings:{ConnectionStringName} is not configured");
+        PostgresUrl.ToConnectionString(
+            configuration.GetConnectionString(ConnectionStringName)
+            ?? throw new InvalidOperationException($"ConnectionStrings:{ConnectionStringName} is not configured"));
 }
