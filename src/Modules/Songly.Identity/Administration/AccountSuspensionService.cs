@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Songly.Common.Events;
+using Songly.Identity.Contracts;
 using Songly.Identity.Domain;
 using Songly.Identity.Http;
 using Songly.Identity.Persistence;
@@ -17,6 +19,7 @@ namespace Songly.Identity.Administration;
 internal sealed partial class AccountSuspensionService(
     IdentityDbContext db,
     AdministrationMetrics metrics,
+    IDomainEvents events,
     TimeProvider time,
     ILogger<AccountSuspensionService> logger)
 {
@@ -26,8 +29,9 @@ internal sealed partial class AccountSuspensionService(
     /// <remarks>
     /// Two prohibitions, carried over from the community moderation rules: <b>not oneself</b> (the
     /// administrator would lose the endpoint that undoes it) and <b>not another administrator</b>
-    /// (two admins could switch each other off). Notifying the suspended user (by e-mail, with the
-    /// term but never the reason) belongs to the notification module and arrives with it.
+    /// (two admins could switch each other off). The suspended user is told by e-mail, with the term
+    /// but never the reason, through <see cref="UserSuspended"/> — published only when the account goes
+    /// from active to suspended, not when an ongoing suspension is re-decided.
     /// </remarks>
     public async Task SuspendAsync(Guid targetUserId, Guid requesterId, SuspendAccountRequest request, CancellationToken cancellationToken)
     {
@@ -45,11 +49,15 @@ internal sealed partial class AccountSuspensionService(
 
         var now = time.GetUtcNow();
         var expiresAt = request.DurationDays is { } days ? now.AddDays(days) : (DateTimeOffset?)null;
-        target.Suspend(request.Reason!, now, expiresAt);
+        var wasActive = target.Suspend(request.Reason!, now, expiresAt);
         await db.SaveChangesAsync(cancellationToken);
 
         metrics.Suspension("suspended");
         LogSuspended(targetUserId, requesterId, expiresAt is null);
+        if (wasActive)
+        {
+            await events.PublishAsync(new UserSuspended(targetUserId, requesterId, expiresAt, now), cancellationToken);
+        }
     }
 
     /// <summary>
@@ -58,6 +66,9 @@ internal sealed partial class AccountSuspensionService(
     /// <remarks>
     /// Lifting a suspension with a pending appeal <b>is</b> accepting the appeal — one decision, so
     /// there is no separate "accept" endpoint, and no state "appeal accepted but still suspended".
+    /// The appellant then hears that the appeal was accepted <i>instead of</i> that the suspension was
+    /// lifted — one message saying why. An expired suspension is only cleaned up: the account worked
+    /// already, there is nothing to tell.
     /// </remarks>
     public async Task LiftAsync(Guid targetUserId, Guid requesterId, CancellationToken cancellationToken)
     {
@@ -68,12 +79,22 @@ internal sealed partial class AccountSuspensionService(
             return;
         }
 
-        var acceptsAppeal = target.IsSuspendedAt(time.GetUtcNow()) && target.HasPendingAppeal;
+        var now = time.GetUtcNow();
+        var wasSuspended = target.IsSuspendedAt(now);
+        var acceptsAppeal = wasSuspended && target.HasPendingAppeal;
         target.LiftSuspension();
         await db.SaveChangesAsync(cancellationToken);
 
         metrics.Suspension("lifted");
         LogLifted(targetUserId, requesterId, acceptsAppeal);
+        if (acceptsAppeal)
+        {
+            await events.PublishAsync(new UserSuspensionAppealAccepted(targetUserId, requesterId, now), cancellationToken);
+        }
+        else if (wasSuspended)
+        {
+            await events.PublishAsync(new UserSuspensionLifted(targetUserId, requesterId, now), cancellationToken);
+        }
     }
 
     /// <summary>
@@ -120,8 +141,8 @@ internal sealed partial class AccountSuspensionService(
     /// <summary>
     /// An appeal against one's <b>own</b> suspension: only while it is active, and once per
     /// suspension. The limit comes from the data structure, not from a counter. The text is read
-    /// only in the administrators' list (pull channel); notifying the administrators that there is
-    /// something to read arrives with the notification module.
+    /// only in the administrators' list (pull channel); the administrators are told by e-mail that
+    /// there is something to read (<see cref="UserSuspensionAppealSubmitted"/>), without the text.
     /// </summary>
     public async Task AppealAsync(Guid userId, SuspensionAppealRequest request, CancellationToken cancellationToken)
     {
@@ -142,6 +163,7 @@ internal sealed partial class AccountSuspensionService(
 
         metrics.Suspension("appeal-submitted");
         LogAppealed(userId);
+        await events.PublishAsync(new UserSuspensionAppealSubmitted(userId, now), cancellationToken);
     }
 
     /// <summary>
@@ -151,7 +173,8 @@ internal sealed partial class AccountSuspensionService(
     public async Task RejectAppealAsync(Guid targetUserId, Guid requesterId, CancellationToken cancellationToken)
     {
         var target = await db.Users.SingleOrDefaultAsync(user => user.Id == targetUserId, cancellationToken);
-        if (target is null || !target.IsSuspendedAt(time.GetUtcNow()) || !target.HasPendingAppeal)
+        var now = time.GetUtcNow();
+        if (target is null || !target.IsSuspendedAt(now) || !target.HasPendingAppeal)
         {
             throw new SuspensionAppealNotFoundException();
         }
@@ -161,6 +184,7 @@ internal sealed partial class AccountSuspensionService(
 
         metrics.Suspension("appeal-rejected");
         LogAppealRejected(targetUserId, requesterId);
+        await events.PublishAsync(new UserSuspensionAppealRejected(targetUserId, requesterId, now), cancellationToken);
     }
 
     private static AppealStatus? ToApi(SuspensionAppealStatus? status) => status switch

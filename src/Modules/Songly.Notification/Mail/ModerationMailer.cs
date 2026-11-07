@@ -51,7 +51,12 @@ internal sealed partial class ModerationMailer(
       IDomainEventHandler<CommunityBanAppealEscalated>,
       IDomainEventHandler<CommunityBanEscalationAccepted>,
       IDomainEventHandler<CommunityBanEscalationRejected>,
-      IDomainEventHandler<PostReportDismissed>
+      IDomainEventHandler<PostReportDismissed>,
+      IDomainEventHandler<UserSuspended>,
+      IDomainEventHandler<UserSuspensionLifted>,
+      IDomainEventHandler<UserSuspensionAppealSubmitted>,
+      IDomainEventHandler<UserSuspensionAppealAccepted>,
+      IDomainEventHandler<UserSuspensionAppealRejected>
 {
     /// <summary>The name of a community deleted between the decision and the mail — practically impossible in one request, but the text needs something.</summary>
     private const string DeletedCommunity = "(usunięta społeczność)";
@@ -262,6 +267,92 @@ internal sealed partial class ModerationMailer(
                 Zespół Songly
                 """, cancellationToken);
         });
+
+    /// <summary>
+    /// A suspension (original ADR 0022) — the only mail here without a community: a sanction of the platform,
+    /// not a community's decision. Mail is the <b>only</b> channel for it: a suspended account has no access to
+    /// the inbox, so a notification there would be locked away from its recipient. No reason, with the term —
+    /// exactly as with a ban.
+    /// </summary>
+    public Task HandleAsync(UserSuspended domainEvent, CancellationToken cancellationToken) =>
+        SafelyAsync(nameof(UserSuspended), () =>
+            SendAsync([domainEvent.UserId], null, MailCategory.DecisionAboutMe, "Songly — konto zawieszone", $"""
+                Cześć!
+
+                Twoje konto w Songly zostało zawieszone i na czas zawieszenia nie
+                możesz z niego korzystać.
+
+                {SuspensionTerm(domainEvent)}
+
+                Powód poznasz w aplikacji — zawieszone konto ma dostęp do informacji o
+                swoim zawieszeniu oraz do usunięcia konta.
+
+                Zespół Songly
+                """, cancellationToken));
+
+    public Task HandleAsync(UserSuspensionLifted domainEvent, CancellationToken cancellationToken) =>
+        SafelyAsync(nameof(UserSuspensionLifted), () =>
+            SendAsync([domainEvent.UserId], null, MailCategory.DecisionAboutMe, "Songly — zawieszenie konta zdjęte", """
+                Cześć!
+
+                Zawieszenie Twojego konta w Songly zostało zdjęte — możesz znów
+                korzystać z aplikacji normalnie.
+
+                Zespół Songly
+                """, cancellationToken));
+
+    /// <summary>
+    /// To <b>every administrator</b> (original ADR 0023): the list of suspensions is also the queue of appeals,
+    /// and the appeal comes from the user, so without the mail nobody in the administration knows of it. No
+    /// interval: one appeal per suspension, and suspensions are imposed by hand, so the volume is limited by
+    /// structure. Without the appeal's text — text from a user does not travel a push channel (ADR 0015).
+    /// </summary>
+    public Task HandleAsync(UserSuspensionAppealSubmitted domainEvent, CancellationToken cancellationToken) =>
+        SafelyAsync(nameof(UserSuspensionAppealSubmitted), async () =>
+            await SendAsync(await admins.AdminIdsAsync(cancellationToken), domainEvent.UserId, MailCategory.ModerationQueue, "Songly — odwołanie od zawieszenia konta", """
+                Cześć!
+
+                Zawieszony użytkownik odwołał się od decyzji. Treść odwołania
+                znajdziesz w aplikacji, w wykazie zawieszonych kont.
+
+                Odwołanie jest jedno na zawieszenie, więc kolejnych wiadomości w tej
+                sprawie nie będzie.
+
+                Zespół Songly
+                """, cancellationToken));
+
+    public Task HandleAsync(UserSuspensionAppealAccepted domainEvent, CancellationToken cancellationToken) =>
+        SafelyAsync(nameof(UserSuspensionAppealAccepted), () =>
+            SendAsync([domainEvent.UserId], null, MailCategory.DecisionAboutMe, "Songly — Twoje odwołanie zostało uznane", """
+                Cześć!
+
+                Uznaliśmy Twoje odwołanie — zawieszenie konta zostało zdjęte i
+                możesz znów korzystać z Songly normalnie.
+
+                Zespół Songly
+                """, cancellationToken));
+
+    public Task HandleAsync(UserSuspensionAppealRejected domainEvent, CancellationToken cancellationToken) =>
+        SafelyAsync(nameof(UserSuspensionAppealRejected), () =>
+            SendAsync([domainEvent.UserId], null, MailCategory.DecisionAboutMe, "Songly — Twoje odwołanie zostało odrzucone", """
+                Cześć!
+
+                Rozpatrzyliśmy Twoje odwołanie i zawieszenie konta pozostaje w mocy.
+                Ta decyzja jest ostateczna dla tego zawieszenia.
+
+                Zespół Songly
+                """, cancellationToken));
+
+    private static string SuspensionTerm(UserSuspended domainEvent)
+    {
+        if (domainEvent.ExpiresAt is not { } expiresAt)
+        {
+            return "Zawieszenie jest bezterminowe.";
+        }
+
+        var days = (expiresAt - domainEvent.OccurredAt).Days;
+        return $"Zawieszenie jest czasowe — wygasa za {days} {(days == 1 ? "dzień" : "dni")} i wtedy konto wróci samo.";
+    }
 
     private static string BanTerm(CommunityMemberBanned domainEvent)
     {

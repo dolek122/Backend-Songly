@@ -8,7 +8,7 @@ namespace Songly.IntegrationTests.Identity;
 /// Appeals against a suspension (original ADR 0023). Ported from the original
 /// <c>SuspensionAppealIntegrationTest</c>. Knowing the decision without being able to contest it
 /// would only be a better-described wall. The e-mail to administrators ("there is an appeal to
-/// read", never its text) arrives with the notification module.
+/// read", never its text) is the notification module's, tested in <c>SuspensionMailTests</c>.
 /// </summary>
 public sealed class SuspensionAppealTests(SonglyApiFactory factory)
 {
