@@ -9,10 +9,9 @@ namespace Songly.IntegrationTests.Identity;
 /// <c>AccountSuspensionIntegrationTest</c>.
 /// </summary>
 /// <remarks>
-/// The original's flow test touches every module at once, so a module that forgot its deletion
-/// handler shows up as a foreign-key error here rather than in production. Until other modules
-/// are ported, a probe handler with its own DbContext stands in for them and proves the mechanism:
-/// handlers run inside the deletion's transaction, before the <c>users</c> row goes.
+/// A probe handler with its own DbContext proves the mechanism: handlers run inside the deletion's
+/// transaction, before the <c>users</c> row goes, and one failing rolls back all of them. The
+/// original's flow test, touching every module at once, is <see cref="AccountDeletionFlowTests"/>.
 /// </remarks>
 public sealed class AccountDeletionTests(SonglyApiFactory factory)
 {
