@@ -7,6 +7,7 @@ using Songly.Common.Paging;
 using Songly.Common.Web;
 using Songly.Notification.Inbox;
 using Songly.Notification.Mail;
+using Songly.Notification.Push;
 
 namespace Songly.Notification.Http;
 
@@ -36,6 +37,21 @@ internal static class NotificationEndpoints
         notifications.MapPut("/mail-preferences", async Task<NoContent> (UpdateMailPreferencesRequest request, ClaimsPrincipal user, MailPreferenceService preferences, CancellationToken cancellationToken) =>
         {
             await preferences.UpdateAsync(user.GetUserId(), request.DecisionsAboutMe!.Value, request.ModerationQueue!.Value, cancellationToken);
+            return TypedResults.NoContent();
+        });
+
+        // Idempotent — the app calls it at every start and whenever FCM replaces the token (original ADR 0040).
+        notifications.MapPut("/push-devices", async Task<NoContent> (RegisterPushDeviceRequest request, ClaimsPrincipal user, PushDeviceService devices, CancellationToken cancellationToken) =>
+        {
+            await devices.RegisterAsync(user.GetUserId(), request.Token!, request.Platform!.Value, cancellationToken);
+            return TypedResults.NoContent();
+        });
+
+        // Before signing out. POST .../removal, not DELETE: the token travels in the body, and a DELETE with a
+        // body gets lost by proxies. Someone else's or an unknown token is a 204 too.
+        notifications.MapPost("/push-devices/removal", async Task<NoContent> (RemovePushDeviceRequest request, ClaimsPrincipal user, PushDeviceService devices, CancellationToken cancellationToken) =>
+        {
+            await devices.UnregisterAsync(user.GetUserId(), request.Token!, cancellationToken);
             return TypedResults.NoContent();
         });
 

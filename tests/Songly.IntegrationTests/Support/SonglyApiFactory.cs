@@ -48,6 +48,8 @@ public sealed class SonglyApiFactory : WebApplicationFactory<Program>, IAsyncLif
     /// <summary>Every e-mail this application instance sent.</summary>
     public RecordingMailSender Mails => this.MailsOf();
 
+    public RecordingPushSender Pushes => this.PushesOf();
+
     /// <summary>
     /// Starts the application right away, not lazily at the first client: the migrations run at
     /// startup, and a test that seeds data with SQL before making a request would otherwise find
@@ -147,6 +149,7 @@ public sealed class SonglyApiFactory : WebApplicationFactory<Program>, IAsyncLif
             services.AddScoped<IDomainEventHandler<UserAccountDeletionRequested>, ProbeDeletionHandler>();
             services.AddScoped<IDomainEventHandler<UserRegistered>, ProbeRegistrationHandler>();
             RecordingMailSender.Install(services);
+            RecordingPushSender.Install(services);
         });
     }
 

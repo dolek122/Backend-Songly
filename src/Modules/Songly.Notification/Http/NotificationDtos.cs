@@ -54,3 +54,31 @@ internal sealed record UpdateMailPreferencesRequest
     [NotNull]
     public bool? ModerationQueue { get; init; }
 }
+
+internal enum PushPlatformDto
+{
+    Android,
+    Ios,
+}
+
+/// <summary>A device's FCM token (original ADR 0040). The limit has room — today's tokens are about 160 characters.</summary>
+internal sealed record RegisterPushDeviceRequest
+{
+    [NotBlank]
+    [Size(0, 512)]
+    public string? Token { get; init; }
+
+    [NotNull]
+    public PushPlatformDto? Platform { get; init; }
+}
+
+/// <summary>
+/// The token in the body, not the path: FCM tokens contain <c>:</c> and are long, and a path with a device's
+/// id would land in access logs.
+/// </summary>
+internal sealed record RemovePushDeviceRequest
+{
+    [NotBlank]
+    [Size(0, 512)]
+    public string? Token { get; init; }
+}

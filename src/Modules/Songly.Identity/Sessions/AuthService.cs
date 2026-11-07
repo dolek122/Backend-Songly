@@ -1,5 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Songly.Common.Events;
+using Songly.Common.Persistence;
+using Songly.Identity.Contracts;
 using Songly.Identity.Http;
 using Songly.Identity.Persistence;
 using Songly.Identity.Security;
@@ -18,6 +21,8 @@ internal sealed partial class AuthService(
     PasswordHasher passwords,
     TokenIssuer tokens,
     IdentityMetrics metrics,
+    IDomainEvents events,
+    ModuleTransaction transaction,
     TimeProvider time,
     ILogger<AuthService> logger)
 {
@@ -126,7 +131,9 @@ internal sealed partial class AuthService(
     /// </remarks>
     private async Task<RefreshTokenReuseDetectedException> ReuseDetectedAsync(Guid userId, CancellationToken cancellationToken)
     {
-        var revoked = await db.Sessions.RevokeAllAsync(userId, time.GetUtcNow(), cancellationToken);
+        var now = time.GetUtcNow();
+        var revoked = await db.Sessions.RevokeAllAsync(userId, now, cancellationToken);
+        await events.PublishAsync(new UserSessionsRevoked(userId, now), cancellationToken);
         metrics.Refresh(RefreshOutcome.Reuse);
         LogReuseDetected(userId, revoked);
         return new RefreshTokenReuseDetectedException();
@@ -189,11 +196,19 @@ internal sealed partial class AuthService(
 
         user.ChangePassword(passwords.Hash(request.NewPassword!));
 
-        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-        await db.SaveChangesAsync(cancellationToken);
-        var revoked = await db.Sessions.RevokeAllAsync(userId, time.GetUtcNow(), cancellationToken);
-        await db.PasswordResetTokens.Where(t => t.UserId == userId).ExecuteDeleteAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
+        // One transaction across modules: the new password, the revoked sessions and what other modules
+        // cut off with them (the phones that get pushes) commit together or not at all.
+        var revoked = await transaction.RunAsync(
+            async token =>
+            {
+                await db.SaveChangesAsync(token);
+                var now = time.GetUtcNow();
+                var count = await db.Sessions.RevokeAllAsync(userId, now, token);
+                await db.PasswordResetTokens.Where(t => t.UserId == userId).ExecuteDeleteAsync(token);
+                await events.PublishAsync(new UserSessionsRevoked(userId, now), token);
+                return count;
+            },
+            cancellationToken);
 
         LogPasswordChanged(userId, revoked);
     }

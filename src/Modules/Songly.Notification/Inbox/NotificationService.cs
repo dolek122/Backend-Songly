@@ -5,6 +5,7 @@ using Songly.Community.Contracts;
 using Songly.Notification.Domain;
 using Songly.Notification.Http;
 using Songly.Notification.Persistence;
+using Songly.Notification.Push;
 using Songly.Profile.Contracts;
 using Songly.Social.Contracts;
 
@@ -16,6 +17,7 @@ internal sealed partial class NotificationService(
     IProfileDirectory profiles,
     ISocialGraph socialGraph,
     ICommunityMembership communities,
+    PushNotifier push,
     TimeProvider time,
     ILogger<NotificationService> logger)
 {
@@ -36,15 +38,24 @@ internal sealed partial class NotificationService(
             return;
         }
 
+        UserNotification? created;
         try
         {
-            await RecordUncheckedAsync(recipientId, actorId, type, resourceId, occurredAt, cancellationToken);
+            created = await RecordUncheckedAsync(recipientId, actorId, type, resourceId, occurredAt, cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             // What failed to save must not be saved again by the next notification of the same request.
             db.ChangeTracker.Clear();
             LogRecordFailed(type, recipientId, exception);
+            return;
+        }
+
+        // Only a new entry rings a phone — one skipped or collapsed by the deduplication does not (original
+        // ADR 0035, 0040), and one that failed to save does not either.
+        if (created is not null)
+        {
+            await push.NotifyAsync(created, cancellationToken);
         }
     }
 
@@ -143,12 +154,13 @@ internal sealed partial class NotificationService(
             .ExecuteUpdateAsync(set => set.SetProperty(n => n.ReadAt, now), cancellationToken);
     }
 
-    private async Task RecordUncheckedAsync(Guid recipientId, Guid actorId, NotificationType type, Guid resourceId, DateTimeOffset occurredAt, CancellationToken cancellationToken)
+    /// <returns>The new entry, or <c>null</c> when nothing new was created (skipped or collapsed).</returns>
+    private async Task<UserNotification?> RecordUncheckedAsync(Guid recipientId, Guid actorId, NotificationType type, Guid resourceId, DateTimeOffset occurredAt, CancellationToken cancellationToken)
     {
         if (NotificationTypes.OncePerResource.Contains(type)
             && await db.Notifications.AnyAsync(n => n.UserId == recipientId && n.Type == type && n.ActorId == actorId && n.ResourceId == resourceId, cancellationToken))
         {
-            return;
+            return null;
         }
 
         if (NotificationTypes.CollapsedWhileUnread.Contains(type)
@@ -156,11 +168,13 @@ internal sealed partial class NotificationService(
         {
             unread.Refresh(resourceId, occurredAt);
             await db.SaveChangesAsync(cancellationToken);
-            return;
+            return null;
         }
 
-        db.Notifications.Add(new UserNotification(recipientId, type, actorId, resourceId, occurredAt));
+        var notification = new UserNotification(recipientId, type, actorId, resourceId, occurredAt);
+        db.Notifications.Add(notification);
         await db.SaveChangesAsync(cancellationToken);
+        return notification;
     }
 
     /// <summary>
