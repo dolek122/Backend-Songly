@@ -1,6 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Songly.Common.Events;
+using Songly.Common.Persistence;
+using Songly.Identity.Contracts;
 using Songly.Identity.Domain;
 using Songly.Identity.Http;
 using Songly.Identity.Persistence;
@@ -29,6 +32,8 @@ internal sealed partial class PasswordResetService(
     PasswordResetMailer mailer,
     IOptions<PasswordResetOptions> options,
     IdentityMetrics metrics,
+    IDomainEvents events,
+    ModuleTransaction transaction,
     TimeProvider time,
     ILogger<PasswordResetService> logger)
 {
@@ -113,18 +118,25 @@ internal sealed partial class PasswordResetService(
         var user = await db.Users.SingleAsync(u => u.Id == userId, cancellationToken);
         user.ChangePassword(passwords.Hash(request.NewPassword!));
 
-        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-        var consumed = await db.PasswordResetTokens.Where(token => token.TokenHash == tokenHash).ExecuteDeleteAsync(cancellationToken);
-        if (consumed == 0)
-        {
-            // A concurrent request with the same link was first.
-            throw InvalidToken();
-        }
+        // One transaction across modules, as with a password change: the new password, the revoked
+        // sessions and the phones unpinned with them commit together or not at all.
+        var revoked = await transaction.RunAsync(
+            async cancel =>
+            {
+                var consumed = await db.PasswordResetTokens.Where(token => token.TokenHash == tokenHash).ExecuteDeleteAsync(cancel);
+                if (consumed == 0)
+                {
+                    // A concurrent request with the same link was first.
+                    throw InvalidToken();
+                }
 
-        await db.SaveChangesAsync(cancellationToken);
-        var revoked = await db.Sessions.RevokeAllAsync(user.Id, now, cancellationToken);
-        await db.PasswordResetTokens.Where(token => token.UserId == user.Id).ExecuteDeleteAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
+                await db.SaveChangesAsync(cancel);
+                var count = await db.Sessions.RevokeAllAsync(user.Id, now, cancel);
+                await db.PasswordResetTokens.Where(token => token.UserId == user.Id).ExecuteDeleteAsync(cancel);
+                await events.PublishAsync(new UserSessionsRevoked(user.Id, now), cancel);
+                return count;
+            },
+            cancellationToken);
 
         metrics.PasswordReset("success");
         LogReset(user.Id, revoked);

@@ -11,13 +11,15 @@ using Songly.Notification.Http;
 using Songly.Notification.Inbox;
 using Songly.Notification.Mail;
 using Songly.Notification.Persistence;
+using Songly.Notification.Push;
 using Songly.Social.Contracts;
 
 namespace Songly.Notification;
 
 /// <summary>
 /// The in-app inbox, filled from other modules' events — their activity and moderation decisions —
-/// and e-mail for the moderation decisions, under the recipient's mail preferences. Push comes later.
+/// e-mail for the moderation decisions, under the recipient's mail preferences, and push to the phone
+/// for every new inbox entry.
 /// </summary>
 public sealed class NotificationModule : IModule
 {
@@ -71,6 +73,15 @@ public sealed class NotificationModule : IModule
         services.AddScoped<IDomainEventHandler<UserSuspensionAppealSubmitted>>(provider => provider.GetRequiredService<ModerationMailer>());
         services.AddScoped<IDomainEventHandler<UserSuspensionAppealAccepted>>(provider => provider.GetRequiredService<ModerationMailer>());
         services.AddScoped<IDomainEventHandler<UserSuspensionAppealRejected>>(provider => provider.GetRequiredService<ModerationMailer>());
+
+        // Push for every new inbox entry (NotificationService calls it), and the register of devices.
+        services.AddOptions<PushDeviceOptions>()
+            .Bind(configuration.GetSection(PushDeviceOptions.Section))
+            .Validate(o => o.MaxDevicesPerUser > 0, $"{PushDeviceOptions.Section}: MaxDevicesPerUser must be positive")
+            .ValidateOnStart();
+        services.AddScoped<PushDeviceService>();
+        services.AddScoped<PushNotifier>();
+        services.AddScoped<IDomainEventHandler<UserSessionsRevoked>, UnpinDevicesOnSessionsRevoked>();
 
         services.AddScoped<IDomainEventHandler<UserAccountDeletionRequested>, DeleteNotificationsOnAccountDeletion>();
     }

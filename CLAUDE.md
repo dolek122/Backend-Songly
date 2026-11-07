@@ -81,9 +81,9 @@ The repo uses Microsoft.Testing.Platform (`global.json`). Filter with
   `Size`, `MaxUtf8Bytes` — named after the original's Bean Validation). Validation runs for every
   endpoint automatically; declare the attribute, do not call anything. Put the attributes on
   properties (`init` properties, not positional record parameters).
-- Side effects (e-mail, later push) go **after** the save that makes them true — the order of
-  statements is the "after commit" (ADR 0005). Send mail through `IMailSender`; a delivery
-  failure must never change the HTTP response.
+- Side effects (e-mail, push) go **after** the save that makes them true — the order of
+  statements is the "after commit" (ADR 0005). Send mail through `IMailSender` and pushes
+  through `IPushSender`; a delivery failure must never change the HTTP response.
 - Lists are paged with `PageQuery` (Spring's bounds: nothing rejected, size 20 by default, at
   most 100) and return `PagedResponse<T>` via `ToPageAsync` on an **ordered** query with the
   filters inside it (ADR 0009). A list only code can order (matching ranks by a computed score) is
@@ -114,7 +114,8 @@ The repo uses Microsoft.Testing.Platform (`global.json`). Filter with
   the recorder. Use `factory.ExecuteSqlAsync` only for state the API cannot produce yet or whose
   age is the subject of the test. Every test makes its own accounts — the database is shared.
 - Read tokens from the e-mail the app sent (`factory.Mails.TokenSentTo(email)`), never from the
-  database. A test needing other settings runs against `factory.WithSettings(...)` — a second
+  database. Pushes are recorded per device token (`factory.Pushes.SentTo(token)`); register a
+  device with a unique token per test. A test needing other settings runs against `factory.WithSettings(...)` — a second
   app instance on the same database and Redis. Background jobs are off in the shared instance.
 - Data that must not reach the shared database (fixed e-mail addresses, an extra administrator)
   goes to a `TemporaryDatabase` of its own: `factory.WithSettings(database.Settings)`. The same for
