@@ -1,2 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <!--
+      Contracts only: the events of identity, content, social and community it counts, and identity's
+      admin policy for the summary. Nothing depends on this module.
+    -->
+    <ProjectReference Include="..\Songly.Community\Songly.Community.csproj" />
+    <ProjectReference Include="..\Songly.Content\Songly.Content.csproj" />
+    <ProjectReference Include="..\Songly.Identity\Songly.Identity.csproj" />
+    <ProjectReference Include="..\Songly.Social\Songly.Social.csproj" />
+  </ItemGroup>
+
 </Project>

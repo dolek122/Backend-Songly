@@ -76,7 +76,8 @@ The repo uses Microsoft.Testing.Platform (`global.json`). Filter with
   new scripts, `V34__...` onwards, in plain SQL.
 - Endpoints are **closed by default**: the fallback policy requires the `USER` role. Public
   endpoints say `.AllowAnonymous()`; everything under `/api/v1/admin` is admin-only by path
-  (ADR 0004). Read the caller's id with `ClaimsPrincipal.GetUserId()`.
+  (ADR 0004). An admin endpoint the original placed elsewhere (the analytics summary) says
+  `.RequireAuthorization(AuthorizationPolicies.Admin)`. Read the caller's id with `ClaimsPrincipal.GetUserId()`.
 - Request records validate with `Songly.Common.Validation` attributes (`NotBlank`, `Email`,
   `Size`, `MaxUtf8Bytes` — named after the original's Bean Validation). Validation runs for every
   endpoint automatically; declare the attribute, do not call anything. Put the attributes on
