@@ -6,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Songly.Common.Web;
+using Songly.Identity.Contracts;
 
 namespace Songly.Identity.Security;
 
@@ -34,7 +35,8 @@ internal static class AuthenticationSetup
             // otherwise (AllowAnonymous or a named policy). A new endpoint is closed by default,
             // also to suspended accounts — it cannot be forgotten the way a check could.
             .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireRole(Roles.User).Build())
-            .AddPolicy(Policies.UserOrSuspended, policy => policy.RequireRole(Roles.User, Roles.Suspended));
+            .AddPolicy(Policies.UserOrSuspended, policy => policy.RequireRole(Roles.User, Roles.Suspended))
+            .AddPolicy(AuthorizationPolicies.Admin, policy => policy.RequireRole(Roles.Admin));
 
         return services;
     }

@@ -58,3 +58,6 @@ without qualifying it everywhere. The table is still `notifications`.
   lines in the inbox's: either channel failing leaves the other. It follows the same rule — nothing it
   does can fail the request — and catches a delivery failure per recipient, so one refused address
   does not stop the mail to the other moderators.
+- The analytics module counts the same events with the same rule: a count that cannot be written is
+  logged, never a failed request. `UserRegistered`, published inside the account's transaction, is
+  counted after that commits (`IAfterCommit`), so a rolled-back registration is not counted.
