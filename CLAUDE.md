@@ -95,6 +95,10 @@ The repo uses Microsoft.Testing.Platform (`global.json`). Filter with
   (ADR 0010). Upload the new file before the save, delete the old one after it.
 - "At most once per interval" goes through `IIntervalGate` (Redis, fail-open). Never make a
   request depend on Redis being up.
+- Rate limits (ADR 0014) are middleware: per client address on the public paths (a new anonymous
+  endpoint that sends mail or checks a secret belongs in `RateLimitOptions.DefaultProtectedPaths`),
+  per user on every write under `/api` by default. They are off in the shared test instance; a
+  test of a limit turns it on with `WithSettings`.
 - Periodic work is a `BackgroundService` with a `PeriodicTimer` on `TimeProvider`, a DI scope per
   run, a catch around every run (an escaping exception stops the whole host) and an `Enabled`
   switch, which the shared test instance turns off (ADR 0007).
