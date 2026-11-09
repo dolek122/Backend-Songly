@@ -8,8 +8,8 @@ namespace Songly.IntegrationTests.Content;
 
 /// <summary>
 /// The limit per reporter across posts (original ADR 0018), in an instance with a limit of 2. Ported
-/// from the original <c>ReportAbuseIntegrationTest</c>; its moderator-mail interval comes with the
-/// notification module.
+/// from the original <c>ReportAbuseIntegrationTest</c>; its interval between mails to moderators is in
+/// <c>ModerationMailTests</c>.
 /// </summary>
 public sealed class ReportLimitTests : IDisposable
 {

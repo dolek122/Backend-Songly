@@ -14,8 +14,9 @@ namespace Songly.Content.Posts;
 
 /// <summary>Publishing, reading and deleting posts, and the feed.</summary>
 /// <remarks>
-/// The original publishes <c>CommunityPostRemovedEvent</c> when a moderator deletes someone else's
-/// post, with the reporters of that post; it arrives with the notification and moderation-log modules.
+/// A moderator deleting someone else's post in a community publishes <see cref="CommunityPostRemoved"/>,
+/// with the reporters of that post — read before the delete, which takes the reports with it. Deleting
+/// one's own post is not a moderation decision and publishes nothing.
 /// </remarks>
 internal sealed class PostService(
     ContentDbContext db,

@@ -50,6 +50,7 @@ builder.Services.AddSonglyStorage(builder.Configuration);
 builder.Services.AddSonglyWeb();
 builder.Services.AddOpenApi();
 builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database");
+builder.Services.AddSonglyMetrics();
 
 foreach (var module in ModuleCatalog.All)
 {
@@ -82,6 +83,7 @@ app.UseSonglyUserRateLimiting();
 app.MapOpenApi().AllowAnonymous();
 app.MapScalarApiReference().AllowAnonymous();
 app.MapHealthChecks("/health").AllowAnonymous();
+app.MapSonglyMetrics();
 
 var api = app.MapGroup(string.Empty).ValidateRequests();
 foreach (var module in modules)

@@ -6,8 +6,8 @@ namespace Songly.IntegrationTests.Community;
 
 /// <summary>
 /// Appeals against bans (original ADR 0017) and the second instance (ADR 0028). Ported from the
-/// original <c>BanAppealIntegrationTest</c> and <c>BanAppealEscalationIntegrationTest</c>; the
-/// notification and mail parts arrive with the notification module.
+/// original <c>BanAppealIntegrationTest</c> and <c>BanAppealEscalationIntegrationTest</c>; their
+/// notification and mail parts are in <c>ModerationNotificationTests</c> and <c>ModerationMailTests</c>.
 /// </summary>
 /// <remarks>
 /// The second instance's queue is global and the database shared, so tests look for their own case
